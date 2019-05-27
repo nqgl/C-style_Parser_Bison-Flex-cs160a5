@@ -62,13 +62,90 @@ void typeError(TypeErrorCode code) {
   exit(1);
 }
 
+// HELPER functions:
+
+
+
+CompoundType getExpressionType(ExpressionNode* expression, Visitor visitor){
+    if (typeid(*expression) == typeid(PlusNode)
+      || (typeid(*expression) == typeid(MinusNode))
+      || (typeid(*expression) == typeid(TimesNode))
+      || (typeid(*expression) == typeid(DivideNode))
+      || (typeid(*expression) == typeid(NegationNode))
+      || (typeid(*expression) == typeid(IntegerLiteralNode))){
+      CompoundType intType = {bt_integer, ""};
+      return intType;
+    } else if (typeid(*expression) == typeid(GreaterNode)
+      || (typeid(*expression) == typeid(GreaterEqualNode))
+      || (typeid(*expression) == typeid(EqualNode))
+      || (typeid(*expression) == typeid(AndNode))
+      || (typeid(*expression) == typeid(OrNode))
+      || (typeid(*expression) == typeid(NotNode))
+      || (typeid(*expression) == typeid(BooleanLiteralNode))){
+      CompoundType booleanType = {bt_boolean, ""};
+      return booleanType;
+    } else if (typeid(*expression) == typeid(MethodCallNode){}
+    else if (typeid(*expression) == typeid(MemberAccessNode)){}
+
+    else if (typeid(*expression) == typeid(VariableNode)){
+
+    }
+    else if (typeid(*expression) == typeid(NewNode))){
+      
+    }
+}
+
+
+
+
+// maybe a function to look up a name in current scope
+// unclear whether it should be a different function for looking up a methodinfo vs a vaiableinfo vs a classinfo
+
+ClassInfo& getClassInfo(std::string& identifier, Visitor* scope) {
+    if (scope->classTable->count(identifier) != 0){
+        return (*(scope->classTable))[identifier];
+    }
+    else {
+        typeError(undefined_class);
+    }
+}
+
+VariableInfo getVariableInfo(std::string& identifier, Visitor* scope){
+    // looks for, in this order:
+    // local variables
+    // parameters (how to find their name? not in methodinfo)
+    // member of class (or superclass (check recursively probably))
+    // try search in currentvariabletable
+    if (scope->currentVariableTable->count(identifier) != 0){
+        // searches both locals and parameters, 
+        // because both are stored in the same variable table
+    
+    }
+    else if ((*(scope->classTable))[scope->currentClassName]  {
+        // VariableInfo& info = getVariableInfoFromClass(scope->currentClassName, identifier, scope);
+      // else try search in classtable[id]->variabletable
+    }
+    else {
+        // throw
+    }
+}
+
+VariableInfo& getVariableInfoFromClass(std::string& classname, std::string& identifier, Visitor* scope){
+    ClassInfo& classInfo = scope->classTable->at(classname);
+    if (classInfo->members->count(classname) != 0) {
+        return classInfo->members->at(identifier);
+    }
+    else if ()
+}
+
+
 // TypeCheck Visitor Functions: These are the functions you will
 // complete to build the symbol table and type check the program.
 // Not all functions must have code, many may be left empty.
 
 void TypeCheck::visitProgramNode(ProgramNode* node) {
   // WRITEME: Replace with code if necessary
-  this->classTable= new ClassTable();
+  this->classTable = new ClassTable();
 
   node->visit_children(this);
 
@@ -83,26 +160,28 @@ void TypeCheck::visitProgramNode(ProgramNode* node) {
     TypeErrorCode(main_class_members_present);
   }
   MethodInfo main_method = methodTable["main"];
-  if (!main_method.returnType== "none"|| main_method.parameters->size()!=0){
+  if (!main_method.returnType == "none" || main_method.parameters->size() != 0){
     TypeErrorCode(main_method_incorrect_signature);
   }
 }
+
+
 void TypeCheck::visitClassNode(ClassNode* node) {
   // WRITEME: Replace with code if necessary
-  ClassInfo class ;
-  class.methods = new MethodTable();
-  class.members = new VariableTable ();
-  class.superClassName = node->identifier_2->name;
-  currentMethodTable = class.methods;
-  currentVariableTable = class.memebrs;
+  ClassInfo classInfo;
+  classInfo.methods = new MethodTable();
+  classInfo.members = new VariableTable();
+  classInfo.superClassName = node->identifier_2->name; // probably need to 
+  this->currentMethodTable = classInfo.methods;
+  this->currentVariableTable = classInfo.members;
 
-  currentClassName = node ->idenfier_1->name;
+  this->currentClassName = node ->idenfier_1->name;
   node->visit_children(this);
-  class.membersize = class.memebers->size()*4;
+  classInfo.membersSize = classInfo.members->size()*4; //TA magic
 
-  (*(this->classTable))[idenfier_1]= class;
+  (*(this->classTable))[idenfier_1] = classInfo;
 
-  if (classTable->count(currentClassName)==0){
+  if (this->classTable->count(currentClassName)==0){ // if constructor returns a type, throw error
     TypeErrorCode(undefined_class);
   }
 
@@ -112,35 +191,66 @@ void TypeCheck::visitClassNode(ClassNode* node) {
 void TypeCheck::visitMethodNode(MethodNode* node) {
   // WRITEME: Replace with code if necessary
   MethodInfo method;
+  /*
   method.returnType = node->methodbody->returnstatement->expression->baseType;
   method.parameters = node->parameter_list;
   method.variables = node->methodbody->decleration_list;
   currentVariableTable =method.variables;
-
+*/
+  
+  /* method.returnType = node->type->basetype;
+  method.parameters = node->parameter_list;
+  currentVariableTable =method.variables;
+*/
 
   node->visit_children(this);
+
   method.localsSize = method.variables->size()*4;
   (*(this->methodTable))[identifier]= method;
-if (method.returnType!= node->type->basetype){
-  TypeErrorCode(return_type_mismatch);
-}
-if(node->identifier == this->currentClassName){
 
+  if (method.nodetype != )
+
+  // check if method is constructor
+  // by if it has the same name as current class return statement is type of method
+  if (node->identifier == this->currentClassName){
+    if ((*(this->methodTable))[node->identifier]->returnType->baseType != bt_none){
+      typeError(constructor_returns_type);
+    }
+  }
+
+  // check return type
+  ExpressionNode* returnExpresion = node->methodbody->returnstatement->expression;
+  switch ()
+
+  (*(this->methodTable))[node->identifier]->returnType->baseType == node->methodbody->returnstatement->baseType
+  if ((*(this->methodTable))[node->identifier]->returnType->baseType != bt_none){
+  }
+
+  (*(this->methodTable))[]
+}
 }
 if (node->baseType != method.returnType){
   TypeErrorCode(return_type_mismatch);
 }
-}
+} //todo fixme
 
 void TypeCheck::visitMethodBodyNode(MethodBodyNode* node) {
   // WRITEME: Replace with code if necessary
-  node->visit_children(this);
+  // do we want to pass in the next methodbodyinfo by 
+
   node->basetype = node->returnstatement->basetype;
-  node->basetype = bt_object;
+  node->basetype = bt_object; // I don't think we want to do this assignment
+                              // eg, what if it's a bt_integer instead
+
   node->objectClassName = node->identifier->name;
+  currentVariableTable = method.variables
+
+
+
+  node->baseType = node->returnstatement->baseType;
+
 
 }
-
 
 void TypeCheck::visitParameterNode(ParameterNode* node) {
   // WRITEME: Replace with code if necessary
@@ -148,10 +258,15 @@ void TypeCheck::visitParameterNode(ParameterNode* node) {
 
 void TypeCheck::visitDeclarationNode(DeclarationNode* node) {
   // WRITEME: Replace with code if necessary
+
+  // increase offset count  
 }
 
 void TypeCheck::visitReturnStatementNode(ReturnStatementNode* node) {
-  // WRITEME: Replace with code if necessary
+  // WRITEME: Replace with code if necessary // WRITEME: Replace with code if necessary
+
+  // 
+  //
 }
 
 void TypeCheck::visitAssignmentNode(AssignmentNode* node) {
