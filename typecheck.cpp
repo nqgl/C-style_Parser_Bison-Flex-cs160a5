@@ -135,7 +135,12 @@ VariableInfo& getVariableInfoFromClass(std::string& classname, std::string& iden
     if (classInfo->members->count(classname) != 0) {
         return classInfo->members->at(identifier);
     }
-    else if ()
+    else if (classInfo.superClassName != ""){
+        if (scope->classTable->count(classInfo.superClassName) != 0){
+            
+        }
+        
+    }
 }
 
 
