@@ -90,7 +90,7 @@ CompoundType getExpressionType(ExpressionNode* expression, Visitor* visitor){
       varInfo = getVariableInfo(expression->identifier, visitor);
       return varInfo->type;
     }
-    if (typeid(*expression) == typeid(MethodCallNode) {
+    else if (typeid(*expression) == typeid(MethodCallNode) {
       std::string callertype;
       if (expression->identifier_1 == "" || expression->identifier_1 == NULL){
         // if first id doesn't exist
@@ -102,7 +102,7 @@ CompoundType getExpressionType(ExpressionNode* expression, Visitor* visitor){
           // we would be unable to access a method of it, thus error in source code
           typeError(not_object);
         }
-        callertype = objectInfo.type.objectClassName
+        callertype = objectInfo.type.objectClassName;
       }
       MethodInfo& methodCalled = getMethodInfoFromClass(callertype, expression->identifier_2, visitor);
       if (methodCalled->returnType->baseType == bt_none && methodCalled->returnType->objectClassName == "failure"){
@@ -113,18 +113,17 @@ CompoundType getExpressionType(ExpressionNode* expression, Visitor* visitor){
       }
     }
     else if (typeid(*expression) == typeid(MemberAccessNode))) {
-        VariableInfo objectInfo = getVariableInfo(expression->identifier_1);
-        if (objectInfo.type.baseType != bt_object){
-          // we would be unable to access a member of it, thus error in source code
-          typeError(not_object);
-        }
-        VariableInfo& checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, expression->identifier_2, visitor);
-        if (checkInfo->type->baseType == bt_none && checkInfo->type->objectClassName == "failure"){
-          typeError(undefined_member); 
-        }
-        else{
-          return checkInfo->type;
-        }
+      VariableInfo objectInfo = getVariableInfo(expression->identifier_1);
+      if (objectInfo.type.baseType != bt_object){
+        // we would be unable to access a member of it, thus error in source code
+        typeError(not_object);
+      }
+      VariableInfo& checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, expression->identifier_2, visitor);
+      if (checkInfo->type->baseType == bt_none && checkInfo->type->objectClassName == "failure"){
+        typeError(undefined_member); 
+      }
+      else {
+        return checkInfo->type;
       }
     }
     else if (typeid(*expression) == typeid(NewNode)) {
@@ -135,30 +134,29 @@ CompoundType getExpressionType(ExpressionNode* expression, Visitor* visitor){
       }
       ClassInfo typeClassInfo& = visitor->currentClassTable.at(expression->identifier);
       if (typeClassInfo->methods->count(expression->identifier) == 0){
-        // throw appropriate error
+        typeError(undefined_method);
       }
       else{
         MethodInfo constructorInfo = typeClassInfo->methods->at(expression->identifier);
-          // go thru expression list
-          std::list<ExpressionNode*>::iterator i_args = expression->expression_list->begin();
-          std::list<CompoundType>::iterator i_params = constructorInfo->parameters->begin();
-          CompoundType& argType;
-          while(i_params != constructorInfo->parameters->end() && i_args != expression->expression_list->end()){
-            argType = getExpressionType(*i_args, visitor);
-            if ((argType->baseType != i_params->baseType) 
-            || (argType->objectClassName != i_params->objectClassName)){
-              typeError(argument_type_mismatch);
-            }
-            i_args++; i_params++;
+        // go thru expression list
+        std::list<ExpressionNode*>::iterator i_args = expression->expression_list->begin();
+        std::list<CompoundType>::iterator i_params = constructorInfo->parameters->begin();
+        CompoundType& argType;
+        while(i_params != constructorInfo->parameters->end() && i_args != expression->expression_list->end()){
+          argType = getExpressionType(*i_args, visitor);
+          if ((argType->baseType != i_params->baseType) 
+          || (argType->objectClassName != i_params->objectClassName)){
+            typeError(argument_type_mismatch);
           }
-          if (i_args != constructorInfo->parameters->end() || i_params != expression->expression_list->end()){
-            typeError(argument_number_mismatch);
-          }
+          i_args++; 
+          i_params++;
+        }
+        if (i_args != constructorInfo->parameters->end() || i_params != expression->expression_list->end()){
+          typeError(argument_number_mismatch);
         }
       }
     }
 }
-
 
 
 
