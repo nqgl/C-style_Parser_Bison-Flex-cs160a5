@@ -106,7 +106,7 @@ else {
 }
 MethodInfo& methodCalled = getMethodInfoFromClass(callertype, expression->identifier_2, visitor);
 if (methodCalled->returnType->baseType == bt_none && methodCalled->returnType->objectClassName == "failure"){
-        typeError(undefined_method); 
+        typeError(undefined_method);
 }
 else {
         return methodCalled->returnType;
@@ -120,7 +120,7 @@ else if (typeid(*expression) == typeid(MemberAccessNode))) {
 }
 VariableInfo& checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, expression->identifier_2, visitor);
 if (checkInfo->type->baseType == bt_none && checkInfo->type->objectClassName == "failure"){
-        typeError(undefined_member); 
+        typeError(undefined_member);
 }
 else {
         return checkInfo->type;
@@ -144,11 +144,11 @@ else{
         CompoundType& argType;
         while(i_params != constructorInfo->parameters->end() && i_args != expression->expression_list->end()){
             argType = getExpressionType(*i_args, visitor);
-            if ((argType->baseType != i_params->baseType) 
+            if ((argType->baseType != i_params->baseType)
                     || (argType->objectClassName != i_params->objectClassName)){
                 typeError(argument_type_mismatch);
 }
-i_args++; 
+i_args++;
 i_params++;
 }
 if (i_args != constructorInfo->parameters->end() || i_params != expression->expression_list->end()){
@@ -179,14 +179,14 @@ VariableInfo getVariableInfo(std::string& identifier, Visitor* scope){
         // member of class (or superclass (check recursively probably))
         // try search in currentvariabletable
         if (scope->currentVariableTable->count(identifier) != 0){
-                // searches both locals and parameters, 
+                // searches both locals and parameters,
                 // because both are stored in the same variable table
-                return scope->currentVariableTable->at(identifier);    
+                return scope->currentVariableTable->at(identifier);
         }
         else {
             VariableInfo& checkInfo = getVariableInfoFromClassMember(scope->currentClassName, identifier, scope);
             if (checkInfo->type->baseType == bt_none && checkInfo->type->objectClassName == "failure"){
-                typeError(undefined_variable); 
+                typeError(undefined_variable);
         }
 }
 }
@@ -204,7 +204,7 @@ VariableInfo getVariableInfoFromClassMember(std::string& classname, std::string&
                         CompoundType failuretype {bt_none, "failure"};
                         VariableInfo varinfo {failuretype, -1, -1};
                         return varinfo
-                }        
+                }
         }
 }
 
@@ -222,8 +222,8 @@ else if (classInfo.superClassName != ""){
                 CompoundType failuretype {bt_none, "failure"};
                 VariableInfo varinfo {failuretype, -1, -1};
                 return varinfo;
-        }        
-} 
+        }
+}
 }
 
 
@@ -242,7 +242,7 @@ CompoundType compundFromTypeNode(TypeNode* node){
         nodetype->objectClassName = "";
     }
     else if (typeid(*node) == typeid(ObjectTypeNode)){
-        nodetype->baseType = 
+        nodetype->baseType =
         nodetype->objectClassName = node->identifier;
     }
     return nodetype;
@@ -280,7 +280,7 @@ void TypeCheck::visitClassNode(ClassNode* node) {
     ClassInfo classInfo;
     classInfo.methods = new MethodTable();
     classInfo.members = new VariableTable();
-    classInfo.superClassName = node->identifier_2->name; // probably need to 
+    classInfo.superClassName = node->identifier_2->name; // probably need to
     this->currentMethodTable = classInfo.methods;
     this->currentVariableTable = classInfo.members;
 
@@ -300,7 +300,7 @@ void TypeCheck::visitClassNode(ClassNode* node) {
 void TypeCheck::visitMethodNode(MethodNode* node) {
     // WRITEME: Replace with code if necessary
     MethodInfo method;
-    method.variables  
+    method.variables;
     method.returnType = compundFromTypeNode(node->type);
     method->parameters = new std::list<CompoundType>();
     for (ParameterNode p : node->parameter_list){
@@ -350,19 +350,8 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
 
 void TypeCheck::visitMethodBodyNode(MethodBodyNode* node) {
     // WRITEME: Replace with code if necessary
-    // do we want to pass in the next methodbodyinfo by 
-
-    node->basetype = node->returnstatement->basetype;
-    node->basetype = bt_object; // I don't think we want to do this assignment
-                                                            // eg, what if it's a bt_integer instead
-
-    node->objectClassName = node->identifier->name;
-    currentVariableTable = method.variables
-
-
-
-    node->baseType = node->returnstatement->baseType;
-
+    // do we want to pass in the next methodbodyinfo by
+  node->visit_children(this);
 
 }
 
@@ -372,19 +361,41 @@ void TypeCheck::visitParameterNode(ParameterNode* node) {
 
 void TypeCheck::visitDeclarationNode(DeclarationNode* node) {
     // WRITEME: Replace with code if necessary
+for (IdentfierNode id : node->identifier_list){
+  VariableInfo var
 
-    // increase offset count  
+    var.type= compoundFromTypeNode(node->type);
+  //  typeid = b
+  if (node->basetype == bt_object){
+    classTable->at(var.type.objectClassName);
+    var.size = classInfo.membersize; //check the size that this should be
+}
+else
+  var.size = 4;
+  var.offset== currentLocalOffset;
+  currentLocalOffset-=4;
+
+(*(this->variableTable))[node->];
+}
+
+
+
+
+
+
+
+    // increase offset count
 }
 
 void TypeCheck::visitReturnStatementNode(ReturnStatementNode* node) {
     // WRITEME: Replace with code if necessary // WRITEME: Replace with code if necessary
 
-    // 
+    //
     //
 }
 
 void TypeCheck::visitAssignmentNode(AssignmentNode* node) {
-    // WRITEME: Replace with code if necessary  
+    // WRITEME: Replace with code if necessary
 }
 
 void TypeCheck::visitCallNode(CallNode* node) {
