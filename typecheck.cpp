@@ -210,20 +210,21 @@ VariableInfo getVariableInfoFromClassMember(std::string& classname, std::string&
 
 
 MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifier, Visitor* scope){
- ClassInfo& classInfo = getClassInfo(classname, scope);
- if (classInfo->methods->count(identifier) != 0) {
+    ClassInfo& classInfo = getClassInfo(classname, scope);
+    if (classInfo->methods->count(identifier) != 0) {
         return classInfo->methods->at(identifier);
-}
-else if (classInfo.superClassName != ""){
+    }
+    else if (classInfo.superClassName != ""){
         if (scope->classTable->count(classInfo.superClassName) != 0){
-                return getMethodInfoFromClass(classInfo.superClassName, identifier, scope);
+            return getMethodInfoFromClass(classInfo.superClassName, identifier, scope);
         }
         else {
-                CompoundType failuretype {bt_none, "failure"};
-                VariableInfo varinfo {failuretype, -1, -1};
-                return varinfo;
-        }
-}
+
+            CompoundType failuretype {bt_none, "failure"};
+            VariableInfo varinfo {failuretype, -1, -1};
+            return varinfo;
+        }        
+    } 
 }
 
 
@@ -243,6 +244,7 @@ CompoundType compundFromTypeNode(TypeNode* node){
     }
     else if (typeid(*node) == typeid(ObjectTypeNode)){
         nodetype->baseType =
+        nodetype->baseType = bt_object;
         nodetype->objectClassName = node->identifier;
     }
     return nodetype;
@@ -260,18 +262,18 @@ void TypeCheck::visitProgramNode(ProgramNode* node) {
 
     if (classTable->count("Main")==0){
         TypeErrorCode(no_main_class);
-}
-ClassInfo main_class = classTable['Main'];
-if (main_class.methods->count("main")==0) {
+    }
+    ClassInfo main_class = classTable['Main'];
+    if (main_class.methods->count("main")==0) {
         TypeErrorCode(no_main_method);
-}
-if (!main_class.members->empty()){
+    }
+    if (!main_class.members->empty()){
         TypeErrorCode(main_class_members_present);
-}
-MethodInfo main_method = methodTable["main"];
-if (!main_method.returnType == "none" || main_method.parameters->size() != 0){
+    }
+    MethodInfo main_method = methodTable["main"];
+    if (main_method.returnType != "none" || main_method.parameters->size() != 0){
         TypeErrorCode(main_method_incorrect_signature);
-}
+    }
 }
 
 
@@ -296,30 +298,39 @@ void TypeCheck::visitClassNode(ClassNode* node) {
 }
 
 
-
+// errors to catch: constructor_returns_type and return_type_mismatch
 void TypeCheck::visitMethodNode(MethodNode* node) {
-    // WRITEME: Replace with code if necessary
+    // setup methodinfo entry
     MethodInfo method;
-    method.variables;
+    method->variables = new VariableTable();
     method.returnType = compundFromTypeNode(node->type);
     method->parameters = new std::list<CompoundType>();
-    for (ParameterNode p : node->parameter_list){
-        CompoundType& parameterType = compundFromTypeNode(p->type);
-        method->parameters->push_back(parameterType);
-
-    }
-
+    
+    // prime visitor for next visits
+    this->currentLocalOffset = -4;
+    this->currentParameterOffset = 12;
     this->currentVariableTable = method.variables;
+
+    // set up methodinfo->parameters and put parameters into variable Table
+    for (ParameterNode p : node->parameter_list){
+        VariableInfo parameterInfo; // var table info
+        CompoundType& parameterType = compundFromTypeNode(p->type); // param list info
+        method->parameters->push_back(parameterType);
+        parameterInfo.offset = this->currentParameterOffset;
+        this->currentParameterOffset += 4;
+        parameterInfo.size = this->classTable->at(parameterType.objectClassName).membersSize;
+        method->variables->push_back(parameterInfo); //worng
+    }
 
     node->visit_children(this);
 
-    method.localsSize = method.variables->size()*4;
-    (*(this->methodTable))[identifier]= method;
+    method.localsSize = method.variables->size()*4; // reserve 4 for each pointer needed for each local
+    (*(this->methodTable))[identifier] = method;
 
-    if (method.nodetype != ){
-    // check if method is constructor
+    if (node->identifier == this->currentClassName){
+    // if method is constructor
     // by if it has the same name as current class return statement is type of method
-        if (node->identifier == this->currentClassName){
+        if (method.returnType.baseType != bt_none){
             if ((*(this->methodTable))[node->identifier]->returnType->baseType != bt_none){
                 typeError(constructor_returns_type);
             }
@@ -327,7 +338,7 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     }
 
     // check return type
-    CompoundType returnStatementType = getExpressionType(node->methodbody->returnstatement->expression, this);
+    CompoundType& returnStatementType = getExpressionType(node->methodbody->returnstatement->expression, this);
 
 
 
@@ -336,7 +347,6 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
 
 
 
-    (*(this->methodTable))[node->identifier]->returnType->baseType == node->methodbody->returnstatement->baseType
     if ((*(this->methodTable))[node->identifier]->returnType->baseType != bt_none){
 
     }
@@ -344,14 +354,15 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     (*(this->methodTable))[]
 
     if (returnStatementType != method.returnType){
-            TypeErrorCode(return_type_mismatch);
+        TypeErrorCode(return_type_mismatch);
     }
-} //todo fixme
+}
 
 void TypeCheck::visitMethodBodyNode(MethodBodyNode* node) {
     // WRITEME: Replace with code if necessary
     // do we want to pass in the next methodbodyinfo by
   node->visit_children(this);
+
 
 }
 
@@ -395,7 +406,9 @@ void TypeCheck::visitReturnStatementNode(ReturnStatementNode* node) {
 }
 
 void TypeCheck::visitAssignmentNode(AssignmentNode* node) {
-    // WRITEME: Replace with code if necessary
+
+    // check for errors: assignment_type_mismatch not_object undefined_member undefined_variable
+
 }
 
 void TypeCheck::visitCallNode(CallNode* node) {
@@ -533,7 +546,7 @@ std::string string(CompoundType type) {
         return std::string("Object(") + type.objectClassName + std::string(")");
         default:
         return std::string("");
-}
+    }
 }
 
 
@@ -542,37 +555,37 @@ void print(VariableTable variableTable, int indent) {
     if (variableTable.size() == 0) {
         std::cout << "}";
         return;
-}
-std::cout << std::endl;
-for (VariableTable::iterator it = variableTable.begin(); it != variableTable.end(); it++) {
-        std::cout << genIndent(indent + 2) << it->first << " -> {" << string(it->second.type);
-        std::cout << ", " << it->second.offset << ", " << it->second.size << "}";
-        if (it != --variableTable.end())
-            std::cout << ",";
+    }
     std::cout << std::endl;
-}
-std::cout << genIndent(indent) << "}";
+    for (VariableTable::iterator it = variableTable.begin(); it != variableTable.end(); it++) {
+            std::cout << genIndent(indent + 2) << it->first << " -> {" << string(it->second.type);
+            std::cout << ", " << it->second.offset << ", " << it->second.size << "}";
+            if (it != --variableTable.end())
+                std::cout << ",";
+        std::cout << std::endl;
+    }
+    std::cout << genIndent(indent) << "}";
 }
 
 void print(MethodTable methodTable, int indent) {
-    std::cout << genIndent(indent) << "MethodTable {";
-    if (methodTable.size() == 0) {
-        std::cout << "}";
-        return;
-}
-std::cout << std::endl;
-for (MethodTable::iterator it = methodTable.begin(); it != methodTable.end(); it++) {
-        std::cout << genIndent(indent + 2) << it->first << " -> {" << std::endl;
-        std::cout << genIndent(indent + 4) << string(it->second.returnType) << "," << std::endl;
-        std::cout << genIndent(indent + 4) << it->second.localsSize << "," << std::endl;
-        print(*it->second.variables, indent + 4);
-        std::cout <<std::endl;
-        std::cout << genIndent(indent + 2) << "}";
-        if (it != --methodTable.end())
-            std::cout << ",";
+        std::cout << genIndent(indent) << "MethodTable {";
+        if (methodTable.size() == 0) {
+            std::cout << "}";
+            return;
+        }
     std::cout << std::endl;
-}
-std::cout << genIndent(indent) << "}";
+    for (MethodTable::iterator it = methodTable.begin(); it != methodTable.end(); it++) {
+            std::cout << genIndent(indent + 2) << it->first << " -> {" << std::endl;
+            std::cout << genIndent(indent + 4) << string(it->second.returnType) << "," << std::endl;
+            std::cout << genIndent(indent + 4) << it->second.localsSize << "," << std::endl;
+            print(*it->second.variables, indent + 4);
+            std::cout <<std::endl;
+            std::cout << genIndent(indent + 2) << "}";
+            if (it != --methodTable.end())
+                std::cout << ",";
+        std::cout << std::endl;
+    }
+    std::cout << genIndent(indent) << "}";
 }
 
 void print(ClassTable classTable, int indent) {
@@ -589,8 +602,8 @@ void print(ClassTable classTable, int indent) {
     if (it != --classTable.end())
             std::cout << ",";
     std::cout << std::endl;
-}
-std::cout << genIndent(indent) << "}" << std::endl;
+    }
+    std::cout << genIndent(indent) << "}" << std::endl;
 }
 
 void print(ClassTable classTable) {
