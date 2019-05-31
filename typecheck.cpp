@@ -62,7 +62,72 @@ void typeError(TypeErrorCode code) {
     exit(1);
 }
 
-// HELPER functions:
+// HELPER functions
+
+ClassInfo getClassInfo(std::string& identifier, TypeCheck* scope) {
+    if (scope->classTable->count(identifier) != 0){
+        return (*(scope->classTable))[identifier];
+    }
+    else {
+        typeError(undefined_class);
+    }
+}
+
+
+VariableInfo getVariableInfoFromClassMember(std::string& classname, std::string& identifier, TypeCheck* scope){
+    ClassInfo classInfo = getClassInfo(classname, scope);
+    if (classInfo.members->count(identifier) != 0) {
+        return classInfo.members->at(identifier);
+    }
+    else if (classInfo.superClassName != ""){
+        if (scope->classTable->count(classInfo.superClassName) != 0){
+            return getVariableInfoFromClassMember(classInfo.superClassName, identifier, scope);
+        }
+        else {
+            CompoundType failuretype {bt_none, "failure"};
+            VariableInfo varinfo {failuretype, -1, -1};
+            return varinfo;
+        }
+    }
+}
+
+VariableInfo getVariableInfo(std::string& identifier, TypeCheck* scope){
+        // looks for, in this order:
+        // local variables
+        // parameters (how to find their name? not in methodinfo)
+        // member of class (or superclass (check recursively probably))
+        // try search in currentvariabletable
+    if (scope->currentVariableTable->count(identifier) != 0){
+                // searches both locals and parameters,
+                // because both are stored in the same variable table
+        return scope->currentVariableTable->at(identifier);
+    }
+    else {
+        VariableInfo checkInfo = getVariableInfoFromClassMember(scope->currentClassName, identifier, scope);
+        if (checkInfo.type.baseType == bt_none && checkInfo.type.objectClassName == "failure"){
+            typeError(undefined_variable);
+        }
+    }
+}
+
+
+
+
+MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifier, TypeCheck* scope){
+    ClassInfo classInfo = getClassInfo(classname, scope);
+    if (classInfo.methods->count(identifier) != 0) {
+        return classInfo.methods->at(identifier);
+    }
+    else if (classInfo.superClassName != ""){
+        if (scope->classTable->count(classInfo.superClassName) != 0){
+            return getMethodInfoFromClass(classInfo.superClassName, identifier, scope);
+        }
+        else {
+            typeError(undefined_method);
+        }        
+    } 
+}
+
 
 
 
@@ -86,56 +151,55 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
             return booleanType;
         }
         else if (typeid(*expression) == typeid(VariableNode)){
-            VariableInfo& varInfo = getVariableInfo(expression->identifier, visitor);
-            return varInfo->type;
+            VariableNode* variable = dynamic_cast<VariableNode*>(expression);
+            VariableInfo varInfo = getVariableInfo(variable->identifier->name, visitor);
+            return varInfo.type;
         }
         else if (typeid(*expression) == typeid(MethodCallNode)) {
+            MethodCallNode* methodCall = dynamic_cast<MethodCallNode*>(expression);
             std::string callertype;
             std::string calledname;
-            if (expression->identifier_2 == NULL){
+            if (methodCall->identifier_2 == NULL){
                 // if first id doesn't exist
                 callertype = visitor->currentClassName;
-                calledname = expression->identifier_1->name;
+                calledname = methodCall->identifier_1->name;
             }
             else {
-                VariableInfo objectInfo = getVariableInfo(expression->identifier_1);
+                VariableInfo objectInfo = getVariableInfo(methodCall->identifier_1->name, visitor);
                 if (objectInfo.type.baseType != bt_object){
                     // we would be unable to access a method of it, thus error in source code
                     typeError(not_object);
                 }
-                callertype = objectInfo.type.objectClassName
-                calledname = expression->identifier_2->name;
+                callertype = objectInfo.type.objectClassName;
+                calledname = methodCall->identifier_2->name;
             }
-            MethodInfo& methodCalled = getMethodInfoFromClass(callertype, calledname, visitor);
-            MethodInfo constructorInfo = typeClassInfo->methods->at(expression->identifier);
-            // go thru expression list
-            std::list<ExpressionNode*>::iterator i_args = expression->expression_list->begin();
-            std::list<CompoundType>::iterator i_params = constructorInfo->parameters->begin();
-            CompoundType& argType;
-            while(i_params != constructorInfo->parameters->end() && i_args != expression->expression_list->end()){
+            MethodInfo methodCalled = getMethodInfoFromClass(callertype, calledname, visitor);
+            // go thru methodCall list
+            std::list<ExpressionNode*>::const_iterator i_args = methodCall->expression_list->begin();
+            std::list<CompoundType>::const_iterator i_params = methodCalled.parameters->begin();
+            CompoundType argType;
+            while(i_params != methodCalled.parameters->end() && i_args != methodCall->expression_list->end()){
                 argType = getExpressionType(*i_args, visitor);
-                if ((argType.baseType != i_params.baseType)
+                if ((argType.baseType != i_params->baseType)
                     || (argType.objectClassName != i_params->objectClassName)){
                     typeError(argument_type_mismatch);
                 }
                 i_args++;
                 i_params++;
             }
-            if (i_args != constructorInfo->parameters->end() || i_params != expression->expression_list->end()){
+            if (i_params != methodCalled.parameters->end() || i_args != methodCall->expression_list->end()){
                 typeError(argument_number_mismatch);
             }
-
-
-
-            return methodCalled->returnType;
+            return methodCalled.returnType;
         }
         else if (typeid(*expression) == typeid(MemberAccessNode)) {
-            VariableInfo objectInfo = getVariableInfo(expression->identifier_1);
+            MemberAccessNode* memberAccess = dynamic_cast<MemberAccessNode*>(expression);
+            VariableInfo objectInfo = getVariableInfo(memberAccess->identifier_1->name, visitor);
             if (objectInfo.type.baseType != bt_object){
                 // we would be unable to access a member of it, thus error in source code
                 typeError(not_object);
             }
-            VariableInfo& checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, expression->identifier_2, visitor);
+            VariableInfo checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, memberAccess->identifier_2->name, visitor);
             if (checkInfo->type.baseType == bt_none && checkInfo->type.objectClassName == "failure"){
                 typeError(undefined_member);
             }
@@ -146,20 +210,21 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
         else if (typeid(*expression) == typeid(NewNode)) {
             // todo
             // assuming that there always must be a constructor defined
-            if (visitor->currentClassTable.count(expression->identifier) == 0){
+            NewNode* newExpression = dynamic_cast<NewNode*>(expression);
+            if (visitor->currentClassTable.count(newExpression->identifier) == 0){
                 typeError(undefined_class);
             }
-            ClassInfo typeClassInfo& = visitor->currentClassTable.at(expression->identifier);
-            if (typeClassInfo->methods->count(expression->identifier) == 0){
+            ClassInfo typeClassInfo& = visitor->currentClassTable.at(newExpression->identifier);
+            if (typeClassInfo->methods->count(newExpression->identifier) == 0){
                 typeError(undefined_method);
             }
             else{
-                MethodInfo constructorInfo = typeClassInfo->methods->at(expression->identifier);
+                MethodInfo constructorInfo = typeClassInfo->methods->at(newExpression->identifier);
                 // go thru expression list
-                std::list<ExpressionNode*>::iterator i_args = expression->expression_list->begin();
-                std::list<CompoundType>::iterator i_params = constructorInfo->parameters->begin();
+                std::list<ExpressionNode*>::const_iterator i_args = newExpression->expression_list.begin();
+                std::list<CompoundType>::const_iterator i_params = constructorInfo.parameters.begin();
                 CompoundType& argType;
-                while(i_params != constructorInfo->parameters->end() && i_args != expression->expression_list->end()){
+                while(i_params != constructorInfo.parameters->end() && i_args != newExpression.expression_list->end()){
                     argType = getExpressionType(*i_args, visitor);
                     if ((argType.baseType != i_params.baseType)
                         || (argType.objectClassName != i_params->objectClassName)){
@@ -168,7 +233,7 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
                     i_args++;
                     i_params++;
                 }
-                if (i_args != constructorInfo->parameters->end() || i_params != expression->expression_list->end()){
+                if (i_params != constructorInfo.parameters->end() || i_args != newExpression.expression_list->end()){
                     typeError(argument_number_mismatch);
                 }
             }
@@ -179,66 +244,7 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
 // maybe a function to look up a name in current scope
 // unclear whether it should be a different function for looking up a methodinfo vs a vaiableinfo vs a classinfo
 
-ClassInfo getClassInfo(std::string& identifier, Visitor* scope) {
-    if (scope->classTable->count(identifier) != 0){
-        return (*(scope->classTable))[identifier];
-    }
-    else {
-        typeError(undefined_class);
-    }
-}
 
-VariableInfo getVariableInfo(std::string& identifier, Visitor* scope){
-        // looks for, in this order:
-        // local variables
-        // parameters (how to find their name? not in methodinfo)
-        // member of class (or superclass (check recursively probably))
-        // try search in currentvariabletable
-    if (scope->currentVariableTable->count(identifier) != 0){
-                // searches both locals and parameters,
-                // because both are stored in the same variable table
-        return scope->currentVariableTable->at(identifier);
-    }
-    else {
-        VariableInfo& checkInfo = getVariableInfoFromClassMember(scope->currentClassName, identifier, scope);
-        if (checkInfo.type.baseType == bt_none && checkInfo.type.objectClassName == "failure"){
-            typeError(undefined_variable);
-        }
-    }
-}
-
-VariableInfo getVariableInfoFromClassMember(std::string& classname, std::string& identifier, Visitor* scope){
-    ClassInfo& classInfo = getClassInfo(classname, scope);
-    if (classInfo->members->count(identifier) != 0) {
-        return classInfo->members->at(identifier);
-    }
-    else if (classInfo.superClassName != ""){
-        if (scope->classTable->count(classInfo.superClassName) != 0){
-            return getVariableInfoFromClassMember(classInfo.superClassName, identifier, scope);
-        }
-        else {
-            CompoundType failuretype {bt_none, "failure"};
-            VariableInfo varinfo {failuretype, -1, -1};
-            return varinfo
-        }
-    }
-}
-
-
-MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifier, Visitor* scope){
-    ClassInfo& classInfo = getClassInfo(classname, scope);
-    if (classInfo->methods->count(identifier) != 0) {
-        return classInfo->methods->at(identifier);
-    }
-    else if (classInfo.superClassName != ""){
-        if (scope->classTable->count(classInfo.superClassName) != 0){
-            return getMethodInfoFromClass(classInfo.superClassName, identifier, scope);
-        }
-        else {
-            typeError(undefined_method);
-        }        
-    } 
-}
 
 
 CompoundType compundFromTypeNode(TypeNode* node){
