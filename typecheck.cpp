@@ -124,8 +124,8 @@ MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifie
         }
         else {
             typeError(undefined_method);
-        }        
-    } 
+        }
+    }
 }
 
 
