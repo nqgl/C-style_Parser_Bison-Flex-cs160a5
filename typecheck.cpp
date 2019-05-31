@@ -139,45 +139,91 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
         || (typeid(*expression) == typeid(IntegerLiteralNode))){
             CompoundType intType = {bt_integer, ""};
             return intType;
-        } else if (typeid(*expression) == typeid(GreaterNode)
-            || (typeid(*expression) == typeid(GreaterEqualNode))
-            || (typeid(*expression) == typeid(EqualNode))
-            || (typeid(*expression) == typeid(AndNode))
-            || (typeid(*expression) == typeid(OrNode))
-            || (typeid(*expression) == typeid(NotNode))
-            || (typeid(*expression) == typeid(BooleanLiteralNode))){
-            CompoundType booleanType = {bt_boolean, ""};
-            return booleanType;
+    } else if (typeid(*expression) == typeid(GreaterNode)
+        || (typeid(*expression) == typeid(GreaterEqualNode))
+        || (typeid(*expression) == typeid(EqualNode))
+        || (typeid(*expression) == typeid(AndNode))
+        || (typeid(*expression) == typeid(OrNode))
+        || (typeid(*expression) == typeid(NotNode))
+        || (typeid(*expression) == typeid(BooleanLiteralNode))){
+        CompoundType booleanType = {bt_boolean, ""};
+        return booleanType;
+    }
+    else if (typeid(*expression) == typeid(VariableNode)){
+        VariableNode* variable = dynamic_cast<VariableNode*>(expression);
+        VariableInfo varInfo = getVariableInfo(variable->identifier->name, visitor);
+        return varInfo.type;
+    }
+    else if (typeid(*expression) == typeid(MethodCallNode)) {
+        MethodCallNode* methodCall = dynamic_cast<MethodCallNode*>(expression);
+        std::string callertype;
+        std::string calledname;
+        if (methodCall->identifier_2 == NULL){
+            // if first id doesn't exist
+            callertype = visitor->currentClassName;
+            calledname = methodCall->identifier_1->name;
         }
-        else if (typeid(*expression) == typeid(VariableNode)){
-            VariableNode* variable = dynamic_cast<VariableNode*>(expression);
-            VariableInfo varInfo = getVariableInfo(variable->identifier->name, visitor);
-            return varInfo.type;
+        else {
+            VariableInfo objectInfo = getVariableInfo(methodCall->identifier_1->name, visitor);
+            if (objectInfo.type.baseType != bt_object){
+                // we would be unable to access a method of it, thus error in source code
+                typeError(not_object);
+            }
+            callertype = objectInfo.type.objectClassName;
+            calledname = methodCall->identifier_2->name;
         }
-        else if (typeid(*expression) == typeid(MethodCallNode)) {
-            MethodCallNode* methodCall = dynamic_cast<MethodCallNode*>(expression);
-            std::string callertype;
-            std::string calledname;
-            if (methodCall->identifier_2 == NULL){
-                // if first id doesn't exist
-                callertype = visitor->currentClassName;
-                calledname = methodCall->identifier_1->name;
+        MethodInfo methodCalled = getMethodInfoFromClass(callertype, calledname, visitor);
+        // go thru methodCall list
+        std::list<ExpressionNode*>::const_iterator i_args = methodCall->expression_list->begin();
+        std::list<CompoundType>::const_iterator i_params = methodCalled.parameters->begin();
+        CompoundType argType;
+        while(i_params != methodCalled.parameters->end() && i_args != methodCall->expression_list->end()){
+            argType = getExpressionType(*i_args, visitor);
+            if ((argType.baseType != i_params->baseType)
+                || (argType.objectClassName != i_params->objectClassName)){
+                typeError(argument_type_mismatch);
             }
-            else {
-                VariableInfo objectInfo = getVariableInfo(methodCall->identifier_1->name, visitor);
-                if (objectInfo.type.baseType != bt_object){
-                    // we would be unable to access a method of it, thus error in source code
-                    typeError(not_object);
-                }
-                callertype = objectInfo.type.objectClassName;
-                calledname = methodCall->identifier_2->name;
-            }
-            MethodInfo methodCalled = getMethodInfoFromClass(callertype, calledname, visitor);
-            // go thru methodCall list
-            std::list<ExpressionNode*>::const_iterator i_args = methodCall->expression_list->begin();
-            std::list<CompoundType>::const_iterator i_params = methodCalled.parameters->begin();
+            i_args++;
+            i_params++;
+        }
+        if (i_params != methodCalled.parameters->end() || i_args != methodCall->expression_list->end()){
+            typeError(argument_number_mismatch);
+        }
+        return methodCalled.returnType;
+    }
+    else if (typeid(*expression) == typeid(MemberAccessNode)) {
+        MemberAccessNode* memberAccess = dynamic_cast<MemberAccessNode*>(expression);
+        VariableInfo objectInfo = getVariableInfo(memberAccess->identifier_1->name, visitor);
+        if (objectInfo.type.baseType != bt_object){
+            // we would be unable to access a member of it, thus error in source code
+            typeError(not_object);
+        }
+        VariableInfo checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, memberAccess->identifier_2->name, visitor);
+        if (checkInfo.type.baseType == bt_none && checkInfo.type.objectClassName == "failure"){
+            typeError(undefined_member);
+        }
+        else {
+            return checkInfo.type;
+        }
+    }
+    else if (typeid(*expression) == typeid(NewNode)) {
+        // todo
+        // assuming that there always must be a constructor defined
+        NewNode* newExpression = dynamic_cast<NewNode*>(expression);
+        if (visitor->classTable->count(newExpression->identifier->name) == 0){
+            typeError(undefined_class);
+        }
+        ClassInfo typeClassInfo = visitor->classTable->at(newExpression->identifier->name);
+        if (typeClassInfo.methods->count(newExpression->identifier->name) == 0){
+            typeError(undefined_method);
+        }
+        else{
+            MethodInfo constructorInfo = typeClassInfo.methods->at(newExpression->identifier->name);
+            // go thru expression list
+            std::list<ExpressionNode*>::const_iterator i_args = newExpression->expression_list->begin();
+            std::list<CompoundType>::const_iterator i_params = constructorInfo.parameters->begin();
             CompoundType argType;
-            while(i_params != methodCalled.parameters->end() && i_args != methodCall->expression_list->end()){
+            while(i_params != constructorInfo.parameters->end() && i_args != newExpression->expression_list->end()){
                 argType = getExpressionType(*i_args, visitor);
                 if ((argType.baseType != i_params->baseType)
                     || (argType.objectClassName != i_params->objectClassName)){
@@ -186,55 +232,8 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
                 i_args++;
                 i_params++;
             }
-            if (i_params != methodCalled.parameters->end() || i_args != methodCall->expression_list->end()){
+            if (i_params != constructorInfo.parameters->end() || i_args != newExpression->expression_list->end()){
                 typeError(argument_number_mismatch);
-            }
-            return methodCalled.returnType;
-        }
-        else if (typeid(*expression) == typeid(MemberAccessNode)) {
-            MemberAccessNode* memberAccess = dynamic_cast<MemberAccessNode*>(expression);
-            VariableInfo objectInfo = getVariableInfo(memberAccess->identifier_1->name, visitor);
-            if (objectInfo.type.baseType != bt_object){
-                // we would be unable to access a member of it, thus error in source code
-                typeError(not_object);
-            }
-            VariableInfo checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, memberAccess->identifier_2->name, visitor);
-            if (checkInfo->type.baseType == bt_none && checkInfo.type.objectClassName == "failure"){
-                typeError(undefined_member);
-            }
-            else {
-                return checkInfo->type;
-            }
-        }
-        else if (typeid(*expression) == typeid(NewNode)) {
-            // todo
-            // assuming that there always must be a constructor defined
-            NewNode* newExpression = dynamic_cast<NewNode*>(expression);
-            if (visitor->classTable->count(newExpression->identifier->name) == 0){
-                typeError(undefined_class);
-            }
-            ClassInfo typeClassInfo = visitor->classTable->at(newExpression->identifier->name);
-            if (typeClassInfo.methods->count(newExpression->identifier->name) == 0){
-                typeError(undefined_method);
-            }
-            else{
-                MethodInfo constructorInfo = typeClassInfo.methods->at(newExpression->identifier->name);
-                // go thru expression list
-                std::list<ExpressionNode*>::const_iterator i_args = newExpression->expression_list.begin();
-                std::list<CompoundType>::const_iterator i_params = constructorInfo.parameters.begin();
-                CompoundType argType;
-                while(i_params != constructorInfo.parameters->end() && i_args != newExpression->expression_list->end()){
-                    argType = getExpressionType(*i_args, visitor);
-                    if ((argType.baseType != i_params.baseType)
-                        || (argType.objectClassName != i_params->objectClassName)){
-                        typeError(argument_type_mismatch);
-                    }
-                    i_args++;
-                    i_params++;
-                }
-                if (i_params != constructorInfo.parameters->end() || i_args != newExpression.expression_list->end()){
-                    typeError(argument_number_mismatch);
-                }
             }
         }
     }
@@ -244,7 +243,7 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
 // unclear whether it should be a different function for looking up a methodinfo vs a vaiableinfo vs a classinfo
 
 
-CompoundType compundFromTypeNode(TypeNode* node){
+CompoundType compoundFromTypeNode(TypeNode* node){
     CompoundType nodetype;
     if (typeid(*node) == typeid(IntegerTypeNode)){
         nodetype.baseType = bt_integer;
@@ -259,9 +258,9 @@ CompoundType compundFromTypeNode(TypeNode* node){
         nodetype.objectClassName = "";
     }
     else if (typeid(*node) == typeid(ObjectTypeNode)){
-        nodetype.baseType =
+        ObjectTypeNode* objectNode = dynamic_cast<ObjectTypeNode*>(node);
         nodetype.baseType = bt_object;
-        nodetype.objectClassName = node->;
+        nodetype.objectClassName = objectNode->identifier->name;
     }
     return nodetype;
 }
@@ -283,15 +282,15 @@ void TypeCheck::visitProgramNode(ProgramNode* node) {
     if (classTable->count("Main")==0){
         TypeErrorCode(no_main_class);
     }
-    ClassInfo main_class = classTable["Main"];
+    ClassInfo main_class = (*(classTable))["Main"];
     if (main_class.methods->count("main")==0) {
         TypeErrorCode(no_main_method);
     }
     if (!main_class.members->empty()){
         TypeErrorCode(main_class_members_present);
     }
-    MethodInfo main_method = methodTable["main"];
-    if (main_method.returnType != "none" || main_method.parameters->size() != 0){
+    MethodInfo main_method = (*(classTable->at("Main").methods))["main"];
+    if (main_method.returnType.baseType != bt_none || main_method.parameters->size() != 0){
         TypeErrorCode(main_method_incorrect_signature);
     }
 }
@@ -310,7 +309,7 @@ void TypeCheck::visitClassNode(ClassNode* node) {
     node->visit_children(this);
     classInfo.membersSize = classInfo.members->size()*4; //TA magic
 
-    (*(this->classTable))[identifier_1] = classInfo;
+    (*(this->classTable))[node->identifier_1->name] = classInfo;
 
     if (this->classTable->count(currentClassName)==0){ // if constructor returns a type, throw error
         TypeErrorCode(undefined_class);
@@ -323,7 +322,7 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     // setup methodinfo entry
     MethodInfo methodInfo;
     methodInfo.variables = new VariableTable();
-    methodInfo.returnType = compundFromTypeNode(node->type);
+    methodInfo.returnType = compoundFromTypeNode(node->type);
     methodInfo.parameters = new std::list<CompoundType>();
 
     // prime visitor for next visits
@@ -334,7 +333,7 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     // set up methodinfo->parameters and put parameters into variable Table
     for (ParameterNode* p : *node->parameter_list){
         VariableInfo parameterInfo; // var table info
-        CompoundType parameterType = compundFromTypeNode(p->type); // param list info
+        CompoundType parameterType = compoundFromTypeNode(p->type); // param list info
         methodInfo.parameters->push_back(parameterType);
         parameterInfo.offset = this->currentParameterOffset;
         this->currentParameterOffset += 4;
@@ -361,10 +360,10 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     CompoundType returnStatementType = getExpressionType(node->methodbody->returnstatement->expression, this);
 
     if (areSameCompoundType(returnStatementType, methodInfo.returnType)){
-        TypeErrorCode(return_type_mismatch);
+        typeError(return_type_mismatch);
     }
 
-    (*(this->currentMethodTable))[identifier] = methodInfo;
+    (*(this->currentMethodTable))[node->identifier->name] = methodInfo;
 }
 
 void TypeCheck::visitMethodBodyNode(MethodBodyNode* node) {
@@ -380,12 +379,12 @@ void TypeCheck::visitParameterNode(ParameterNode* node) {
 
 void TypeCheck::visitDeclarationNode(DeclarationNode* node) {
     // WRITEME: Replace with code if necessary
-    for (IdentfierNode id : node->identifier_list){
+    for (IdentifierNode* id : *node->identifier_list){
         VariableInfo var;
         var.type = compoundFromTypeNode(node->type);
         //  typeid = b
-        if (node.basetype == bt_object){
-            var.size = classTable->at(var.type.objectClassName).membersize; //check the size that this should be
+        if (node->basetype == bt_object){
+            var.size = classTable->at(var.type.objectClassName).membersSize; //check the size that this should be
         }
         else { var.size = 4; }
         var.offset = currentLocalOffset;
@@ -419,23 +418,23 @@ if (expressionVariableInfo.type.baseType == bt_none && expressionVariableInfo.ty
     if (newVar.type.baseType != bt_object){
       typeError(not_object);
     }
-    if (expressionType != expressionVariableInfo.type){
+    if (areSameCompoundType(expressionType, expressionVariableInfo.type)){
       typeError(assignment_type_mismatch);
     }
 
 
   }
-  else if (node->identifier_2->name=""){ //NULL or empty string?
+  else if (node->identifier_2 == NULL){ //NULL or empty string?
     //check classtable at name of class of 1st ID
     VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
     VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(currentClassName, node->identifier_1->name, this);
-    if (expressionVariableInfo->type->baseType == bt_none && expressionVariableInfo->type->objectClassName == "failure"){
+    if (expressionVariableInfo.type.baseType == bt_none && expressionVariableInfo.type.objectClassName == "failure"){
       typeError(undefined_member);
     }
-    if (newVar.type.basetype != bt_object){
+    if (newVar.type.baseType != bt_object){
       typeError(not_object);
     }
-    if (expressionType != expressionVariableInfo.type){
+    if (areSameCompoundType(expressionType, expressionVariableInfo.type)){
       typeError(assignment_type_mismatch);
     }
 
@@ -575,13 +574,13 @@ void TypeCheck::visitNegationNode(NegationNode* node) {
 void TypeCheck::visitMethodCallNode(MethodCallNode* node) {
     // WRITEME: Replace with code if necessary
     std::string classname = currentClassName;
-    MethodInfo& calledMethod;
+    MethodInfo calledMethod;
     if (node->identifier_2 != NULL){
-        VariableInfo& var = getVariableInfo(node->identifier_1->name, this);
-        if (var->type.baseType != bt_object){
+        VariableInfo var = getVariableInfo(node->identifier_1->name, this);
+        if (var.type.baseType != bt_object){
             typeError(not_object);
         }
-        classname = var->type.objectClassName;
+        classname = var.type.objectClassName;
         calledMethod = getMethodInfoFromClass(classname, node->identifier_2->name, this);
     }
     else {
@@ -598,9 +597,9 @@ void TypeCheck::visitMethodCallNode(MethodCallNode* node) {
 // doing
 void TypeCheck::visitMemberAccessNode(MemberAccessNode* node) {
     // WRITEME: Replace with code if necessary
-    VariableInfo& var = getVariableInfo(node->identifier_1->name); //checks for undefined variable
-    VariableInfo& assignedType = getVariableInfoFromClassMember(var->type.objectClassName, node->identifier_2->name, this);
-    if (assignedType->type.baseType == bt_none && assignedType->type.objectClassName == "failure"){
+    VariableInfo var = getVariableInfo(node->identifier_1->name, this); //checks for undefined variable
+    VariableInfo assignedType = getVariableInfoFromClassMember(var.type.objectClassName, node->identifier_2->name, this);
+    if (assignedType.type.baseType == bt_none && assignedType.type.objectClassName == "failure"){
         typeError(undefined_member);
     }
 
@@ -657,9 +656,9 @@ void TypeCheck::visitBooleanTypeNode(BooleanTypeNode* node) {
 void TypeCheck::visitObjectTypeNode(ObjectTypeNode* node) {
     // WRITEME: Replace with code if necessary
     // There might be something to do there
-    getClassInfo(node->identifier->name); // this should simply check that
+    getClassInfo(node->identifier->name, this); // this should simply check that
                                 //there is a class by that name to have as a type
-    node.baseType = bt_object;
+    node->basetype = bt_object;
 }
 
 
