@@ -266,8 +266,8 @@ CompoundType compundFromTypeNode(TypeNode* node){
     return nodetype;
 }
 
-bool areSameType(CompoundType& t1, CompoundType& t2){
-
+bool areSameCompoundType(CompoundType& t1, CompoundType& t2){
+    return (t1.baseType != t2.baseType) && (t1.objectClassName != t2.objectClassName);
 }
 
 // TypeCheck Visitor Functions: These are the functions you will
@@ -360,7 +360,7 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     // check return type
     CompoundType returnStatementType = getExpressionType(node->methodbody->returnstatement->expression, this);
 
-    if (returnStatementType != methodInfo.returnType){
+    if (areSameCompoundType(returnStatementType, methodInfo.returnType)){
         TypeErrorCode(return_type_mismatch);
     }
 
@@ -411,12 +411,12 @@ void TypeCheck::visitAssignmentNode(AssignmentNode* node) {
   if (node->identifier_2->name!=""){ //NULL or empty string?
     //check classtable at name off class of 1st ID
     VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
-VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(newVar.type.objectClassName, identifier_2->name, this);
-if (expressionVariableInfo->type->baseType == bt_none && expressionVariableInfo->type->objectClassName == "failure"){
+VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(newVar.type.objectClassName, node->identifier_2->name, this);
+if (expressionVariableInfo.type.baseType == bt_none && expressionVariableInfo.type.objectClassName == "failure"){
   typeError(undefined_member);
 }
 
-    if (newVar.type.basetype != bt_object){
+    if (newVar.type.baseType != bt_object){
       typeError(not_object);
     }
     if (expressionType != expressionVariableInfo.type){
@@ -428,7 +428,7 @@ if (expressionVariableInfo->type->baseType == bt_none && expressionVariableInfo-
   else if (node->identifier_2->name=""){ //NULL or empty string?
     //check classtable at name of class of 1st ID
     VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
-    VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(currentClassName, identifier_1->name, this);
+    VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(currentClassName, node->identifier_1->name, this);
     if (expressionVariableInfo->type->baseType == bt_none && expressionVariableInfo->type->objectClassName == "failure"){
       typeError(undefined_member);
     }
@@ -452,7 +452,7 @@ void TypeCheck::visitCallNode(CallNode* node) {
 
 void TypeCheck::visitIfElseNode(IfElseNode* node) {
     // WRITEME: Replace with code if necessary
-    if (getExpressionType(node->expression).baseType != bt_boolean){
+    if (getExpressionType(node->expression, this).baseType != bt_boolean){
         typeError(if_predicate_type_mismatch);
     }
     node->visit_children(this);
@@ -460,7 +460,7 @@ void TypeCheck::visitIfElseNode(IfElseNode* node) {
 
 void TypeCheck::visitWhileNode(WhileNode* node) {
     // WRITEME: Replace with code if necessary
-    if (getExpressionType(node->expression).baseType != bt_boolean){
+    if (getExpressionType(node->expression, this).baseType != bt_boolean){
         typeError(while_predicate_type_mismatch);
     }
     node->visit_children(this);
@@ -468,7 +468,7 @@ void TypeCheck::visitWhileNode(WhileNode* node) {
 
 void TypeCheck::visitDoWhileNode(DoWhileNode* node) {
     // WRITEME: Replace with code if necessary
-    if (getExpressionType(node->expression).baseType != bt_boolean){
+    if (getExpressionType(node->expression, this).baseType != bt_boolean){
         typeError(while_predicate_type_mismatch);
     }
     node->visit_children(this);
@@ -487,86 +487,86 @@ void TypeCheck::visitPrintNode(PrintNode* node) {
 // expression nodes:
 void TypeCheck::visitPlusNode(PlusNode* node) {
     // WRITEME: Replace with code if necessary
-    if ((getExpressionType(node->expression_1).baseType != bt_integer)
-            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+    if ((getExpressionType(node->expression_1, this).baseType != bt_integer)
+            || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitMinusNode(MinusNode* node) {
     // WRITEME: Replace with code if necessary
-    if ((getExpressionType(node->expression_1).baseType != bt_integer)
-            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+    if ((getExpressionType(node->expression_1, this).baseType != bt_integer)
+            || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitTimesNode(TimesNode* node) {
     // WRITEME: Replace with code if necessary
-    if ((getExpressionType(node->expression_1).baseType != bt_integer)
-            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+    if ((getExpressionType(node->expression_1, this).baseType != bt_integer)
+            || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitDivideNode(DivideNode* node) {
     // WRITEME: Replace with code if necessary
-    if ((getExpressionType(node->expression_1).baseType != bt_integer)
-            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+    if ((getExpressionType(node->expression_1, this).baseType != bt_integer)
+            || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitGreaterNode(GreaterNode* node) {
     // WRITEME: Replace with code if necessary
-    if ((getExpressionType(node->expression_1).baseType != bt_integer)
-            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+    if ((getExpressionType(node->expression_1, this).baseType != bt_integer)
+            || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitGreaterEqualNode(GreaterEqualNode* node) {
     // WRITEME: Replace with code if necessary
-    if ((getExpressionType(node->expression_1).baseType != bt_integer)
-            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+    if ((getExpressionType(node->expression_1, this).baseType != bt_integer)
+            || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitEqualNode(EqualNode* node) {
     // WRITEME: Replace with code if necessary
-    if ((getExpressionType(node->expression_1).baseType != bt_integer)
-            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+    if ((getExpressionType(node->expression_1, this).baseType != bt_integer)
+            || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitAndNode(AndNode* node) {
     // WRITEME: Replace with code if necessary
-    if ((getExpressionType(node->expression_1).baseType != bt_boolean)
-            || (getExpressionType(node->expression_2).baseType != bt_boolean)){
+    if ((getExpressionType(node->expression_1, this).baseType != bt_boolean)
+            || (getExpressionType(node->expression_2, this).baseType != bt_boolean)){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitOrNode(OrNode* node) {
     // WRITEME: Replace with code if necessary
-    if ((getExpressionType(node->expression_1).baseType != bt_boolean)
-            || (getExpressionType(node->expression_2).baseType != bt_boolean)){
+    if ((getExpressionType(node->expression_1, this).baseType != bt_boolean)
+            || (getExpressionType(node->expression_2, this).baseType != bt_boolean)){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitNotNode(NotNode* node) {
     // WRITEME: Replace with code if necessary
-    if (getExpressionType(node->expression).baseType != bt_boolean){
+    if (getExpressionType(node->expression, this).baseType != bt_boolean){
         typeError(expression_type_mismatch);
     }
 }
 
 void TypeCheck::visitNegationNode(NegationNode* node) {
     // WRITEME: Replace with code if necessary
-    if (getExpressionType(node->expression).baseType != bt_boolean){
+    if (getExpressionType(node->expression, this).baseType != bt_boolean){
         typeError(expression_type_mismatch);
     }
 }
@@ -592,7 +592,7 @@ void TypeCheck::visitMethodCallNode(MethodCallNode* node) {
 
 
     // instead, I think we may be able to just do:
-    getExpressionType(node);
+    getExpressionType(node, this);
 }
 
 // doing
@@ -624,7 +624,7 @@ void TypeCheck::visitBooleanLiteralNode(BooleanLiteralNode* node) {
 //done(?)
 void TypeCheck::visitNewNode(NewNode* node) {
     // WRITEME: Replace with code if necessary
-    getExpressionType(node);
+    getExpressionType(node, this);
 }
 
 void TypeCheck::visitNoneNode(NoneNode* node) {
