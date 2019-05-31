@@ -58,8 +58,8 @@ void typeError(TypeErrorCode code) {
         case main_method_incorrect_signature:
         std::cerr << "The \"main\" method of the \"Main\" class has an incorrect signature." << std::endl;
         break;
-}
-exit(1);
+    }
+    exit(1);
 }
 
 // HELPER functions:
@@ -67,109 +67,126 @@ exit(1);
 
 
 CompoundType getExpressionType(ExpressionNode* expression, Visitor* visitor){
-        if (typeid(*expression) == typeid(PlusNode)
-            || (typeid(*expression) == typeid(MinusNode))
-            || (typeid(*expression) == typeid(TimesNode))
-            || (typeid(*expression) == typeid(DivideNode))
-            || (typeid(*expression) == typeid(NegationNode))
-            || (typeid(*expression) == typeid(IntegerLiteralNode))){
+    if (typeid(*expression) == typeid(PlusNode)
+        || (typeid(*expression) == typeid(MinusNode))
+        || (typeid(*expression) == typeid(TimesNode))
+        || (typeid(*expression) == typeid(DivideNode))
+        || (typeid(*expression) == typeid(NegationNode))
+        || (typeid(*expression) == typeid(IntegerLiteralNode))){
             CompoundType intType = {bt_integer, ""};
-    return intType;
-} else if (typeid(*expression) == typeid(GreaterNode)
-    || (typeid(*expression) == typeid(GreaterEqualNode))
-    || (typeid(*expression) == typeid(EqualNode))
-    || (typeid(*expression) == typeid(AndNode))
-    || (typeid(*expression) == typeid(OrNode))
-    || (typeid(*expression) == typeid(NotNode))
-    || (typeid(*expression) == typeid(BooleanLiteralNode))){
-    CompoundType booleanType = {bt_boolean, ""};
-    return booleanType;
-}
-else if (typeid(*expression) == typeid(VariableNode)){
-    VariableInfo& varInfo;
-    varInfo = getVariableInfo(expression->identifier, visitor);
-    return varInfo->type;
-}
-else if (typeid(*expression) == typeid(MethodCallNode) {
-    std::string callertype;
-    if (expression->identifier_1 == "" || expression->identifier_1 == NULL){
+            return intType;
+        } else if (typeid(*expression) == typeid(GreaterNode)
+            || (typeid(*expression) == typeid(GreaterEqualNode))
+            || (typeid(*expression) == typeid(EqualNode))
+            || (typeid(*expression) == typeid(AndNode))
+            || (typeid(*expression) == typeid(OrNode))
+            || (typeid(*expression) == typeid(NotNode))
+            || (typeid(*expression) == typeid(BooleanLiteralNode))){
+            CompoundType booleanType = {bt_boolean, ""};
+            return booleanType;
+        }
+        else if (typeid(*expression) == typeid(VariableNode)){
+            VariableInfo& varInfo;
+            varInfo = getVariableInfo(expression->identifier, visitor);
+            return varInfo->type;
+        }
+        else if (typeid(*expression) == typeid(MethodCallNode)) {
+            std::string callertype;
+            std::string calledname;
+            if (expression->identifier_2 == NULL){
                 // if first id doesn't exist
-        callertype = visitor->currentClassName;
-}
-else {
-        VariableInfo objectInfo = getVariableInfo(expression->identifier_1);
-        if (objectInfo.type.baseType != bt_object){
+                callertype = visitor->currentClassName;
+                calledname = expression->identifier_1->name;
+            }
+            else {
+                VariableInfo objectInfo = getVariableInfo(expression->identifier_1);
+                if (objectInfo.type.baseType != bt_object){
                     // we would be unable to access a method of it, thus error in source code
-            typeError(not_object);
-    }
-    callertype = objectInfo.type.objectClassName;
-}
-MethodInfo& methodCalled = getMethodInfoFromClass(callertype, expression->identifier_2, visitor);
-if (methodCalled->returnType->baseType == bt_none && methodCalled->returnType->objectClassName == "failure"){
-        typeError(undefined_method);
-}
-else {
-        return methodCalled->returnType;
-}
-}
-else if (typeid(*expression) == typeid(MemberAccessNode))) {
-    VariableInfo objectInfo = getVariableInfo(expression->identifier_1);
-    if (objectInfo.type.baseType != bt_object){
+                    typeError(not_object);
+                }
+                callertype = objectInfo.type.objectClassName
+                calledname = expression->identifier_2->name;
+            }
+            MethodInfo& methodCalled = getMethodInfoFromClass(callertype, calledname, visitor);
+            MethodInfo constructorInfo = typeClassInfo->methods->at(expression->identifier);
+            // go thru expression list
+            std::list<ExpressionNode*>::iterator i_args = expression->expression_list->begin();
+            std::list<CompoundType>::iterator i_params = constructorInfo->parameters->begin();
+            CompoundType& argType;
+            while(i_params != constructorInfo->parameters->end() && i_args != expression->expression_list->end()){
+                argType = getExpressionType(*i_args, visitor);
+                if ((argType.baseType != i_params.baseType)
+                    || (argType.objectClassName != i_params->objectClassName)){
+                    typeError(argument_type_mismatch);
+                }
+                i_args++;
+                i_params++;
+            }
+            if (i_args != constructorInfo->parameters->end() || i_params != expression->expression_list->end()){
+                typeError(argument_number_mismatch);
+            }
+
+
+
+            return methodCalled->returnType;
+        }
+        else if (typeid(*expression) == typeid(MemberAccessNode)) {
+            VariableInfo objectInfo = getVariableInfo(expression->identifier_1);
+            if (objectInfo.type.baseType != bt_object){
                 // we would be unable to access a member of it, thus error in source code
-        typeError(not_object);
-}
-VariableInfo& checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, expression->identifier_2, visitor);
-if (checkInfo->type->baseType == bt_none && checkInfo->type->objectClassName == "failure"){
-        typeError(undefined_member);
-}
-else {
-        return checkInfo->type;
-}
-}
-else if (typeid(*expression) == typeid(NewNode)) {
+                typeError(not_object);
+            }
+            VariableInfo& checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, expression->identifier_2, visitor);
+            if (checkInfo->type.baseType == bt_none && checkInfo->type.objectClassName == "failure"){
+                typeError(undefined_member);
+            }
+            else {
+                return checkInfo->type;
+            }
+        }
+        else if (typeid(*expression) == typeid(NewNode)) {
             // todo
             // assuming that there always must be a constructor defined
-    if (visitor->currentClassTable.count(expression->identifier) == 0){
-        typeError(undefined_class);
-}
-ClassInfo typeClassInfo& = visitor->currentClassTable.at(expression->identifier);
-if (typeClassInfo->methods->count(expression->identifier) == 0){
-        typeError(undefined_method);
-}
-else{
-        MethodInfo constructorInfo = typeClassInfo->methods->at(expression->identifier);
+            if (visitor->currentClassTable.count(expression->identifier) == 0){
+                typeError(undefined_class);
+            }
+            ClassInfo typeClassInfo& = visitor->currentClassTable.at(expression->identifier);
+            if (typeClassInfo->methods->count(expression->identifier) == 0){
+                typeError(undefined_method);
+            }
+            else{
+                MethodInfo constructorInfo = typeClassInfo->methods->at(expression->identifier);
                 // go thru expression list
-        std::list<ExpressionNode*>::iterator i_args = expression->expression_list->begin();
-        std::list<CompoundType>::iterator i_params = constructorInfo->parameters->begin();
-        CompoundType& argType;
-        while(i_params != constructorInfo->parameters->end() && i_args != expression->expression_list->end()){
-            argType = getExpressionType(*i_args, visitor);
-            if ((argType->baseType != i_params->baseType)
-                    || (argType->objectClassName != i_params->objectClassName)){
-                typeError(argument_type_mismatch);
+                std::list<ExpressionNode*>::iterator i_args = expression->expression_list->begin();
+                std::list<CompoundType>::iterator i_params = constructorInfo->parameters->begin();
+                CompoundType& argType;
+                while(i_params != constructorInfo->parameters->end() && i_args != expression->expression_list->end()){
+                    argType = getExpressionType(*i_args, visitor);
+                    if ((argType.baseType != i_params.baseType)
+                        || (argType.objectClassName != i_params->objectClassName)){
+                        typeError(argument_type_mismatch);
+                    }
+                    i_args++;
+                    i_params++;
+                }
+                if (i_args != constructorInfo->parameters->end() || i_params != expression->expression_list->end()){
+                    typeError(argument_number_mismatch);
+                }
+            }
+        }
+    }
 }
-i_args++;
-i_params++;
-}
-if (i_args != constructorInfo->parameters->end() || i_params != expression->expression_list->end()){
-    typeError(argument_number_mismatch);
-}
-}
-}
-}
-
-
 
 // maybe a function to look up a name in current scope
 // unclear whether it should be a different function for looking up a methodinfo vs a vaiableinfo vs a classinfo
 
 ClassInfo getClassInfo(std::string& identifier, Visitor* scope) {
-        if (scope->classTable->count(identifier) != 0){
-                return (*(scope->classTable))[identifier];
-        }
-        else {
-                typeError(undefined_class);
-        }
+    if (scope->classTable->count(identifier) != 0){
+        return (*(scope->classTable))[identifier];
+    }
+    else {
+        typeError(undefined_class);
+    }
 }
 
 VariableInfo getVariableInfo(std::string& identifier, Visitor* scope){
@@ -178,34 +195,34 @@ VariableInfo getVariableInfo(std::string& identifier, Visitor* scope){
         // parameters (how to find their name? not in methodinfo)
         // member of class (or superclass (check recursively probably))
         // try search in currentvariabletable
-        if (scope->currentVariableTable->count(identifier) != 0){
+    if (scope->currentVariableTable->count(identifier) != 0){
                 // searches both locals and parameters,
                 // because both are stored in the same variable table
-                return scope->currentVariableTable->at(identifier);
+        return scope->currentVariableTable->at(identifier);
+    }
+    else {
+        VariableInfo& checkInfo = getVariableInfoFromClassMember(scope->currentClassName, identifier, scope);
+        if (checkInfo.type.baseType == bt_none && checkInfo.type.objectClassName == "failure"){
+            typeError(undefined_variable);
         }
-        else {
-            VariableInfo& checkInfo = getVariableInfoFromClassMember(scope->currentClassName, identifier, scope);
-            if (checkInfo->type->baseType == bt_none && checkInfo->type->objectClassName == "failure"){
-                typeError(undefined_variable);
-        }
-}
+    }
 }
 
 VariableInfo getVariableInfoFromClassMember(std::string& classname, std::string& identifier, Visitor* scope){
-        ClassInfo& classInfo = getClassInfo(classname, scope);
-        if (classInfo->members->count(identifier) != 0) {
-                return classInfo->members->at(identifier);
+    ClassInfo& classInfo = getClassInfo(classname, scope);
+    if (classInfo->members->count(identifier) != 0) {
+        return classInfo->members->at(identifier);
+    }
+    else if (classInfo.superClassName != ""){
+        if (scope->classTable->count(classInfo.superClassName) != 0){
+            return getVariableInfoFromClassMember(classInfo.superClassName, identifier, scope);
         }
-        else if (classInfo.superClassName != ""){
-                if (scope->classTable->count(classInfo.superClassName) != 0){
-                        return getVariableInfoFromClassMember(classInfo.superClassName, identifier, scope);
-                }
-                else {
-                        CompoundType failuretype {bt_none, "failure"};
-                        VariableInfo varinfo {failuretype, -1, -1};
-                        return varinfo
-                }
+        else {
+            CompoundType failuretype {bt_none, "failure"};
+            VariableInfo varinfo {failuretype, -1, -1};
+            return varinfo
         }
+    }
 }
 
 
@@ -219,10 +236,7 @@ MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifie
             return getMethodInfoFromClass(classInfo.superClassName, identifier, scope);
         }
         else {
-
-            CompoundType failuretype {bt_none, "failure"};
-            VariableInfo varinfo {failuretype, -1, -1};
-            return varinfo;
+            typeError(undefined_method);
         }        
     } 
 }
@@ -231,21 +245,21 @@ MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifie
 CompoundType compundFromTypeNode(TypeNode* node){
     CompoundType nodetype;
     if (typeid(*node) == typeid(IntegerTypeNode)){
-        nodetype->baseType = bt_integer;
-        nodetype->objectClassName = "";
+        nodetype.baseType = bt_integer;
+        nodetype.objectClassName = "";
     }
     else if (typeid(*node) == typeid(BooleanTypeNode)){
-        nodetype->baseType = bt_boolean;
-        nodetype->objectClassName = "";
+        nodetype.baseType = bt_boolean;
+        nodetype.objectClassName = "";
     }
     else if (typeid(*node) == typeid(NoneNode)){
-        nodetype->baseType = bt_none;
-        nodetype->objectClassName = "";
+        nodetype.baseType = bt_none;
+        nodetype.objectClassName = "";
     }
     else if (typeid(*node) == typeid(ObjectTypeNode)){
-        nodetype->baseType =
-        nodetype->baseType = bt_object;
-        nodetype->objectClassName = node->identifier;
+        nodetype.baseType =
+        nodetype.baseType = bt_object;
+        nodetype.objectClassName = node->identifier;
     }
     return nodetype;
 }
@@ -325,13 +339,12 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     node->visit_children(this);
 
     method.localsSize = method.variables->size()*4; // reserve 4 for each pointer needed for each local
-    (*(this->methodTable))[identifier] = method;
 
     if (node->identifier == this->currentClassName){
     // if method is constructor
     // by if it has the same name as current class return statement is type of method
         if (method.returnType.baseType != bt_none){
-            if ((*(this->methodTable))[node->identifier]->returnType->baseType != bt_none){
+            if ((*(this->methodTable))[node->identifier]->returnType.baseType != bt_none){
                 typeError(constructor_returns_type);
             }
         }
@@ -340,62 +353,39 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     // check return type
     CompoundType& returnStatementType = getExpressionType(node->methodbody->returnstatement->expression, this);
 
-
-
-
-
-
-
-
-    if ((*(this->methodTable))[node->identifier]->returnType->baseType != bt_none){
-
-    }
-
-    (*(this->methodTable))[]
-
     if (returnStatementType != method.returnType){
         TypeErrorCode(return_type_mismatch);
     }
+
+    (*(this->methodTable))[identifier] = method;
 }
 
 void TypeCheck::visitMethodBodyNode(MethodBodyNode* node) {
     // WRITEME: Replace with code if necessary
     // do we want to pass in the next methodbodyinfo by
-  node->visit_children(this);
-
-
+    node->visit_children(this);
 }
 
 void TypeCheck::visitParameterNode(ParameterNode* node) {
+    // handled in visitMethodNode
     // WRITEME: Replace with code if necessary
 }
 
 void TypeCheck::visitDeclarationNode(DeclarationNode* node) {
     // WRITEME: Replace with code if necessary
-for (IdentfierNode id : node->identifier_list){
-  VariableInfo var
-
-    var.type= compoundFromTypeNode(node->type);
-  //  typeid = b
-  if (node->basetype == bt_object){
-    classTable->at(var.type.objectClassName);
-    var.size = classInfo.membersize; //check the size that this should be
-}
-else
-  var.size = 4;
-  var.offset== currentLocalOffset;
-  currentLocalOffset-=4;
-
-(*(this->variableTable))[node->];
-}
-
-
-
-
-
-
-
-    // increase offset count
+    for (IdentfierNode id : node->identifier_list){
+        VariableInfo var;
+        var.type = compoundFromTypeNode(node->type);
+        //  typeid = b
+        if (node.basetype == bt_object){
+            var.size = classTable->at(var.type.objectClassName).membersize; //check the size that this should be
+        }
+        else { var.size = 4; }
+        var.offset = currentLocalOffset;
+        currentLocalOffset -= 4;
+        
+        (*(this->currentVariableTable))[id->name] = var;
+    }
 }
 
 void TypeCheck::visitReturnStatementNode(ReturnStatementNode* node) {
@@ -413,102 +403,180 @@ void TypeCheck::visitAssignmentNode(AssignmentNode* node) {
 
 void TypeCheck::visitCallNode(CallNode* node) {
     // WRITEME: Replace with code if necessary
+    node->visit_children(this);
 }
 
 void TypeCheck::visitIfElseNode(IfElseNode* node) {
     // WRITEME: Replace with code if necessary
+    if (getExpressionType(node->expression).baseType != bt_boolean){
+        typeError(if_predicate_type_mismatch);
+    }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitWhileNode(WhileNode* node) {
     // WRITEME: Replace with code if necessary
+    if (getExpressionType(node->expression).baseType != bt_boolean){
+        typeError(while_predicate_type_mismatch);
+    }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitDoWhileNode(DoWhileNode* node) {
     // WRITEME: Replace with code if necessary
+    if (getExpressionType(node->expression).baseType != bt_boolean){
+        typeError(while_predicate_type_mismatch);
+    }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitPrintNode(PrintNode* node) {
     // WRITEME: Replace with code if necessary
+
 }
 
+
+
+
+
+
+// expression nodes:
 void TypeCheck::visitPlusNode(PlusNode* node) {
     // WRITEME: Replace with code if necessary
+    if ((getExpressionType(node->expression_1).baseType != bt_integer)
+            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitMinusNode(MinusNode* node) {
     // WRITEME: Replace with code if necessary
+    if ((getExpressionType(node->expression_1).baseType != bt_integer)
+            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitTimesNode(TimesNode* node) {
     // WRITEME: Replace with code if necessary
+    if ((getExpressionType(node->expression_1).baseType != bt_integer)
+            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitDivideNode(DivideNode* node) {
     // WRITEME: Replace with code if necessary
+    if ((getExpressionType(node->expression_1).baseType != bt_integer)
+            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitGreaterNode(GreaterNode* node) {
     // WRITEME: Replace with code if necessary
+    if ((getExpressionType(node->expression_1).baseType != bt_integer)
+            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitGreaterEqualNode(GreaterEqualNode* node) {
     // WRITEME: Replace with code if necessary
+    if ((getExpressionType(node->expression_1).baseType != bt_integer)
+            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitEqualNode(EqualNode* node) {
     // WRITEME: Replace with code if necessary
+    if ((getExpressionType(node->expression_1).baseType != bt_integer)
+            || (getExpressionType(node->expression_2).baseType != bt_integer)){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitAndNode(AndNode* node) {
     // WRITEME: Replace with code if necessary
+    if ((getExpressionType(node->expression_1).baseType != bt_boolean)
+            || (getExpressionType(node->expression_2).baseType != bt_boolean)){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitOrNode(OrNode* node) {
     // WRITEME: Replace with code if necessary
+    if ((getExpressionType(node->expression_1).baseType != bt_boolean)
+            || (getExpressionType(node->expression_2).baseType != bt_boolean)){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitNotNode(NotNode* node) {
     // WRITEME: Replace with code if necessary
+    if (getExpressionType(node->expression).baseType != bt_boolean){
+        typeError(expression_type_mismatch);
+    }
 }
 
 void TypeCheck::visitNegationNode(NegationNode* node) {
     // WRITEME: Replace with code if necessary
+    if (getExpressionType(node->expression).baseType != bt_boolean){
+        typeError(expression_type_mismatch);
+    }
 }
 
+// doing
 void TypeCheck::visitMethodCallNode(MethodCallNode* node) {
     // WRITEME: Replace with code if necessary
+    std::string classname = currentClassName;
+    MethodInfo& calledMethod;
+    if (node->identifier_2 != NULL){
+        VariableInfo& var = getVariableInfo(node->identifier_1->name, this);
+        if (var->type.baseType != bt_object){
+            typeError(not_object);
+        }
+        classname = var->type.objectClassName;
+        calledMethod = getMethodInfoFromClass(classname, node->identifier_2->name, this);
+    }
+    else {
+        calledMethod = getMethodInfoFromClass(currentClassName, node->identifier_1->name, this);
+    }
+    // next, check stuff about calledMethod
+
 }
 
+// doing
 void TypeCheck::visitMemberAccessNode(MemberAccessNode* node) {
     // WRITEME: Replace with code if necessary
+    VariableInfo& var = getVariableInfo(node->identifier_1->name); //checks for undefined variable
+    VariableInfo& assignedType = getVariableInfoFromClassMember(var->type.objectClassName, node->identifier_2->name, this);
+    if (assignedType->type.baseType == bt_none && assignedType->type.objectClassName == "failure"){
+        typeError(undefined_member);
+    }
+
 }
 
 void TypeCheck::visitVariableNode(VariableNode* node) {
     // WRITEME: Replace with code if necessary
+    getVariableInfo(node->identifier->name, this); //does undef_var check
 }
 
+//nothing to do here?
 void TypeCheck::visitIntegerLiteralNode(IntegerLiteralNode* node) {
     // WRITEME: Replace with code if necessary
 }
 
+//nothing to do here?
 void TypeCheck::visitBooleanLiteralNode(BooleanLiteralNode* node) {
     // WRITEME: Replace with code if necessary
 }
 
+//done(?)
 void TypeCheck::visitNewNode(NewNode* node) {
     // WRITEME: Replace with code if necessary
-}
-
-void TypeCheck::visitIntegerTypeNode(IntegerTypeNode* node) {
-    // WRITEME: Replace with code if necessary
-}
-
-void TypeCheck::visitBooleanTypeNode(BooleanTypeNode* node) {
-    // WRITEME: Replace with code if necessary
-}
-
-void TypeCheck::visitObjectTypeNode(ObjectTypeNode* node) {
-    // WRITEME: Replace with code if necessary
+    getExpressionType(node);
 }
 
 void TypeCheck::visitNoneNode(NoneNode* node) {
@@ -524,6 +592,29 @@ void TypeCheck::visitIntegerNode(IntegerNode* node) {
 }
 
 
+// done?
+void TypeCheck::visitIntegerTypeNode(IntegerTypeNode* node) {
+    // WRITEME: Replace with code if necessary
+    // pretty sure nothing to do here
+}
+
+
+// done?
+void TypeCheck::visitBooleanTypeNode(BooleanTypeNode* node) {
+    // WRITEME: Replace with code if necessary
+    // pretty sure nothing to do here
+}
+
+// done?
+void TypeCheck::visitObjectTypeNode(ObjectTypeNode* node) {
+    // WRITEME: Replace with code if necessary
+    // There might be something to do there
+    getClassInfo(node->identifier->name); // this should simply check that 
+                                //there is a class by that name to have as a type
+    node.baseType = bt_object;
+}
+
+
 // The following functions are used to print the Symbol Table.
 // They do not need to be modified at all.
 
@@ -531,7 +622,7 @@ std::string genIndent(int indent) {
     std::string string = std::string("");
     for (int i = 0; i < indent; i++)
         string += std::string(" ");
-return string;
+    return string;
 }
 
 std::string string(CompoundType type) {
@@ -558,31 +649,31 @@ void print(VariableTable variableTable, int indent) {
     }
     std::cout << std::endl;
     for (VariableTable::iterator it = variableTable.begin(); it != variableTable.end(); it++) {
-            std::cout << genIndent(indent + 2) << it->first << " -> {" << string(it->second.type);
-            std::cout << ", " << it->second.offset << ", " << it->second.size << "}";
-            if (it != --variableTable.end())
-                std::cout << ",";
+        std::cout << genIndent(indent + 2) << it->first << " -> {" << string(it->second.type);
+        std::cout << ", " << it->second.offset << ", " << it->second.size << "}";
+        if (it != --variableTable.end())
+            std::cout << ",";
         std::cout << std::endl;
     }
     std::cout << genIndent(indent) << "}";
 }
 
 void print(MethodTable methodTable, int indent) {
-        std::cout << genIndent(indent) << "MethodTable {";
-        if (methodTable.size() == 0) {
-            std::cout << "}";
-            return;
-        }
+    std::cout << genIndent(indent) << "MethodTable {";
+    if (methodTable.size() == 0) {
+        std::cout << "}";
+        return;
+    }
     std::cout << std::endl;
     for (MethodTable::iterator it = methodTable.begin(); it != methodTable.end(); it++) {
-            std::cout << genIndent(indent + 2) << it->first << " -> {" << std::endl;
-            std::cout << genIndent(indent + 4) << string(it->second.returnType) << "," << std::endl;
-            std::cout << genIndent(indent + 4) << it->second.localsSize << "," << std::endl;
-            print(*it->second.variables, indent + 4);
-            std::cout <<std::endl;
-            std::cout << genIndent(indent + 2) << "}";
-            if (it != --methodTable.end())
-                std::cout << ",";
+        std::cout << genIndent(indent + 2) << it->first << " -> {" << std::endl;
+        std::cout << genIndent(indent + 4) << string(it->second.returnType) << "," << std::endl;
+        std::cout << genIndent(indent + 4) << it->second.localsSize << "," << std::endl;
+        print(*it->second.variables, indent + 4);
+        std::cout <<std::endl;
+        std::cout << genIndent(indent + 2) << "}";
+        if (it != --methodTable.end())
+            std::cout << ",";
         std::cout << std::endl;
     }
     std::cout << genIndent(indent) << "}";
@@ -594,14 +685,14 @@ void print(ClassTable classTable, int indent) {
         std::cout << genIndent(indent + 2) << it->first << " -> {" << std::endl;
         if (it->second.superClassName != "")
             std::cout << genIndent(indent + 4) << it->second.superClassName << "," << std::endl;
-    print(*it->second.members, indent + 4);
-    std::cout << "," << std::endl;
-    print(*it->second.methods, indent + 4);
-    std::cout <<std::endl;
-    std::cout << genIndent(indent + 2) << "}";
-    if (it != --classTable.end())
+        print(*it->second.members, indent + 4);
+        std::cout << "," << std::endl;
+        print(*it->second.methods, indent + 4);
+        std::cout <<std::endl;
+        std::cout << genIndent(indent + 2) << "}";
+        if (it != --classTable.end())
             std::cout << ",";
-    std::cout << std::endl;
+        std::cout << std::endl;
     }
     std::cout << genIndent(indent) << "}" << std::endl;
 }
