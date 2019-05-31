@@ -18,7 +18,6 @@ digit       [0-9]
 identifier ([a-zA-Z][a-zA-Z0-9_]*)
 %%
 
-/* WRITEME: Copy your Flex rules and actions from Project 4 here. */
 ((0|[1-9]{digit}*))   {long int value = strtol(yytext,NULL,0); yylval.integerliteral_ptr =new IntegerLiteralNode (new IntegerNode(value));return T_LITERAL;}
 "new"         {return T_NEW;}
 "integer"     {return T_INTEGER;}
