@@ -87,7 +87,7 @@ Member : type idList ';'    {$$ = new DeclarationNode($1,$2);}
        ;
 
 Methods : Method Methods {$$ = $2 ; $$->push_front($1);}
-        |%empty {$$ = new std::list<MethodNode*>();}
+        | %empty {$$ = new std::list<MethodNode*>();}
         ;
 
 Method : T_ID '(' Parameters ')' T_ARROW ReturnType '{' Body '}' {$$ = new MethodNode($1,$3,$6,$8); }
@@ -109,7 +109,7 @@ StatementList : Statement Statements {$$ = $2 ;$$->push_front($1);}
                 ;
 
 Statements : Statement Statements {$$ = $2; $$->push_front($1);}
-           |%empty {$$ = new std::list<StatementNode*>();}
+           | %empty {$$ = new std::list<StatementNode*>();}
            ;
 Statement : Assignment ';' {$$ = $1;}
           | MethodCall ';' {$$ = new CallNode($1);}
