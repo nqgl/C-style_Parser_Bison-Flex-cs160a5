@@ -110,7 +110,7 @@ public:
   // and set this pointer at the beginning of the TypeCheck
   // visitor pass over the AST.
   ClassTable* classTable;
-  
+
   // These members allow you to keep track of the current
   // method table and and current variable table. This allows
   // you to insert variables and methods as soon as you finish
@@ -125,7 +125,7 @@ public:
   // maintain/set them as your visitor visits the AST.
   MethodTable* currentMethodTable;
   VariableTable* currentVariableTable;
-  
+
   // These members allow you to keep track of several current
   // offsets. Important offsets are the current offset in the
   // local variable space, the current offset for parameters,
@@ -147,7 +147,7 @@ public:
   // This member allows you to keep track of the name of the
   // current class. This is necessary for type checking.
   std::string currentClassName;
-  
+
   // All the visitor functions. You will need to write
   // appropriate implementation in the typecheck.cpp file.
   virtual void visitProgramNode(ProgramNode* node);
