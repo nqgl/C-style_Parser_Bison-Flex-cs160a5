@@ -237,8 +237,8 @@ MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifie
         }
         else {
             typeError(undefined_method);
-        }        
-    } 
+        }
+    }
 }
 
 
@@ -383,7 +383,7 @@ void TypeCheck::visitDeclarationNode(DeclarationNode* node) {
         else { var.size = 4; }
         var.offset = currentLocalOffset;
         currentLocalOffset -= 4;
-        
+
         (*(this->currentVariableTable))[id->name] = var;
     }
 }
@@ -646,7 +646,7 @@ void TypeCheck::visitBooleanTypeNode(BooleanTypeNode* node) {
 void TypeCheck::visitObjectTypeNode(ObjectTypeNode* node) {
     // WRITEME: Replace with code if necessary
     // There might be something to do there
-    getClassInfo(node->identifier->name); // this should simply check that 
+    getClassInfo(node->identifier->name); // this should simply check that
                                 //there is a class by that name to have as a type
     node.baseType = bt_object;
 }
