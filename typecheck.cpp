@@ -130,7 +130,6 @@ MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifie
 
 
 
-
 CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
     if (typeid(*expression) == typeid(PlusNode)
         || (typeid(*expression) == typeid(MinusNode))
@@ -200,7 +199,7 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
                 typeError(not_object);
             }
             VariableInfo checkInfo = getVariableInfoFromClassMember(objectInfo.type.objectClassName, memberAccess->identifier_2->name, visitor);
-            if (checkInfo->type.baseType == bt_none && checkInfo->type.objectClassName == "failure"){
+            if (checkInfo->type.baseType == bt_none && checkInfo.type.objectClassName == "failure"){
                 typeError(undefined_member);
             }
             else {
@@ -211,20 +210,20 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
             // todo
             // assuming that there always must be a constructor defined
             NewNode* newExpression = dynamic_cast<NewNode*>(expression);
-            if (visitor->currentClassTable.count(newExpression->identifier) == 0){
+            if (visitor->classTable->count(newExpression->identifier->name) == 0){
                 typeError(undefined_class);
             }
-            ClassInfo typeClassInfo& = visitor->currentClassTable.at(newExpression->identifier);
-            if (typeClassInfo->methods->count(newExpression->identifier) == 0){
+            ClassInfo typeClassInfo = visitor->classTable->at(newExpression->identifier->name);
+            if (typeClassInfo.methods->count(newExpression->identifier->name) == 0){
                 typeError(undefined_method);
             }
             else{
-                MethodInfo constructorInfo = typeClassInfo->methods->at(newExpression->identifier);
+                MethodInfo constructorInfo = typeClassInfo.methods->at(newExpression->identifier->name);
                 // go thru expression list
                 std::list<ExpressionNode*>::const_iterator i_args = newExpression->expression_list.begin();
                 std::list<CompoundType>::const_iterator i_params = constructorInfo.parameters.begin();
-                CompoundType& argType;
-                while(i_params != constructorInfo.parameters->end() && i_args != newExpression.expression_list->end()){
+                CompoundType argType;
+                while(i_params != constructorInfo.parameters->end() && i_args != newExpression->expression_list->end()){
                     argType = getExpressionType(*i_args, visitor);
                     if ((argType.baseType != i_params.baseType)
                         || (argType.objectClassName != i_params->objectClassName)){
@@ -244,59 +243,6 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
 // maybe a function to look up a name in current scope
 // unclear whether it should be a different function for looking up a methodinfo vs a vaiableinfo vs a classinfo
 
-<<<<<<< HEAD
-=======
-VariableInfo getVariableInfo(std::string& identifier, Visitor* scope){
-        // looks for, in this order:
-        // local variables
-        // parameters (how to find their name? not in methodinfo)
-        // member of class (or superclass (check recursively probably))
-        // try search in currentvariabletable
-    if (scope->currentVariableTable->count(identifier) != 0){
-                // searches both locals and parameters,
-                // because both are stored in the same variable table
-        return scope->currentVariableTable->at(identifier);
-    }
-    else {
-        VariableInfo& checkInfo = getVariableInfoFromClassMember(scope->currentClassName, identifier, scope);
-        if (checkInfo.type.baseType == bt_none && checkInfo.type.objectClassName == "failure"){
-            typeError(undefined_variable);
-        }
-    }
-}
-
-VariableInfo getVariableInfoFromClassMember(std::string& classname, std::string& identifier, Visitor* scope){
-    ClassInfo& classInfo = getClassInfo(classname, scope);
-    if (classInfo->members->count(identifier) != 0) {
-        return classInfo->members->at(identifier);
-    }
-    else if (classInfo.superClassName != ""){
-        if (scope->classTable->count(classInfo.superClassName) != 0){
-            return getVariableInfoFromClassMember(classInfo.superClassName, identifier, scope);
-        }
-        else {
-            CompoundType failuretype {bt_none, "failure"};
-            VariableInfo varinfo {failuretype, -1, -1};
-            return varinfo
-        }
-    }
-}
-
-
-MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifier, Visitor* scope){
-    ClassInfo& classInfo = getClassInfo(classname, scope);
-    if (classInfo->methods->count(identifier) != 0) {
-        return classInfo->methods->at(identifier);
-    }
-    else if (classInfo.superClassName != ""){
-        if (scope->classTable->count(classInfo.superClassName) != 0){
-            return getMethodInfoFromClass(classInfo.superClassName, identifier, scope);
-        }
-        else {
-            typeError(undefined_method);
-        }
-    }
-}
 
 CompoundType compundFromTypeNode(TypeNode* node){
     CompoundType nodetype;
@@ -315,9 +261,13 @@ CompoundType compundFromTypeNode(TypeNode* node){
     else if (typeid(*node) == typeid(ObjectTypeNode)){
         nodetype.baseType =
         nodetype.baseType = bt_object;
-        nodetype.objectClassName = node->identifier;
+        nodetype.objectClassName = node->;
     }
     return nodetype;
+}
+
+bool areSameType(CompoundType& t1, CompoundType& t2){
+
 }
 
 // TypeCheck Visitor Functions: These are the functions you will
@@ -371,49 +321,50 @@ void TypeCheck::visitClassNode(ClassNode* node) {
 // errors to catch: constructor_returns_type and return_type_mismatch
 void TypeCheck::visitMethodNode(MethodNode* node) {
     // setup methodinfo entry
-    MethodInfo method;
-    method->variables = new VariableTable();
-    method.returnType = compundFromTypeNode(node->type);
-    method->parameters = new std::list<CompoundType>();
+    MethodInfo methodInfo;
+    methodInfo.variables = new VariableTable();
+    methodInfo.returnType = compundFromTypeNode(node->type);
+    methodInfo.parameters = new std::list<CompoundType>();
 
     // prime visitor for next visits
     this->currentLocalOffset = -4;
     this->currentParameterOffset = 12;
-    this->currentVariableTable = method.variables;
+    this->currentVariableTable = methodInfo.variables;
 
     // set up methodinfo->parameters and put parameters into variable Table
-    for (ParameterNode p : node->parameter_list){
+    for (ParameterNode* p : *node->parameter_list){
         VariableInfo parameterInfo; // var table info
-        CompoundType& parameterType = compundFromTypeNode(p->type); // param list info
-        method->parameters->push_back(parameterType);
+        CompoundType parameterType = compundFromTypeNode(p->type); // param list info
+        methodInfo.parameters->push_back(parameterType);
         parameterInfo.offset = this->currentParameterOffset;
         this->currentParameterOffset += 4;
         parameterInfo.size = this->classTable->at(parameterType.objectClassName).membersSize;
-        method->variables->push_back(parameterInfo); //worng
+        parameterInfo.type = parameterType;
+        (*(methodInfo.variables))[p->identifier->name]; //worng
     }
 
     node->visit_children(this);
 
-    method.localsSize = method.variables->size()*4; // reserve 4 for each pointer needed for each local
+    methodInfo.localsSize = methodInfo.variables->size()*4; // reserve 4 for each pointer needed for each local
 
-    if (node->identifier == this->currentClassName){
-    // if method is constructor
-    // by if it has the same name as current class return statement is type of method
-        if (method.returnType.baseType != bt_none){
-            if ((*(this->methodTable))[node->identifier]->returnType.baseType != bt_none){
+    if (node->identifier->name == this->currentClassName){
+    // if methodInfo is constructor
+    // by if it has the same name as current class return statement is type of methodInfo
+        if (methodInfo.returnType.baseType != bt_none){
+            if ((*(this->currentMethodTable))[node->identifier->name].returnType.baseType != bt_none){
                 typeError(constructor_returns_type);
             }
         }
     }
 
     // check return type
-    CompoundType& returnStatementType = getExpressionType(node->methodbody->returnstatement->expression, this);
+    CompoundType returnStatementType = getExpressionType(node->methodbody->returnstatement->expression, this);
 
-    if (returnStatementType != method.returnType){
+    if (returnStatementType != methodInfo.returnType){
         TypeErrorCode(return_type_mismatch);
     }
 
-    (*(this->methodTable))[identifier] = method;
+    (*(this->currentMethodTable))[identifier] = methodInfo;
 }
 
 void TypeCheck::visitMethodBodyNode(MethodBodyNode* node) {
