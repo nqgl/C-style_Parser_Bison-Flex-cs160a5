@@ -319,7 +319,7 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     method->variables = new VariableTable();
     method.returnType = compundFromTypeNode(node->type);
     method->parameters = new std::list<CompoundType>();
-    
+
     // prime visitor for next visits
     this->currentLocalOffset = -4;
     this->currentParameterOffset = 12;
@@ -397,6 +397,43 @@ void TypeCheck::visitReturnStatementNode(ReturnStatementNode* node) {
 
 void TypeCheck::visitAssignmentNode(AssignmentNode* node) {
 
+  node->visit_children(this);
+
+  CompoundType expressionType = getExpressionType(node->expression, this);
+
+  if (node->identifier_2->name!=""){ //NULL or empty string?
+    //check classtable at name off class of 1st ID
+    VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
+VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(newVar.type.objectClassName, identifier_2->name, this);
+if (expressionVariableInfo->type->baseType == bt_none && expressionVariableInfo->type->objectClassName == "failure"){
+  typeError(undefined_member);
+}
+
+    if (newVar.type.basetype != bt_object){
+      typeError(not_object);
+    }
+    if (expressionType != expressionVariableInfo.type){
+      typeError(assignment_type_mismatch);
+    }
+
+
+  }
+  else if (node->identifier_2->name=""){ //NULL or empty string?
+    //check classtable at name off class of 1st ID
+    VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
+    VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(currentClassName, identifier_1->name, this);
+    if (expressionVariableInfo->type->baseType == bt_none && expressionVariableInfo->type->objectClassName == "failure"){
+      typeError(undefined_member);
+    }
+    if (newVar.type.basetype != bt_object){
+      typeError(not_object);
+    }
+    if (expressionType != expressionVariableInfo.type){
+      typeError(assignment_type_mismatch);
+    }
+
+
+  }
     // check for errors: assignment_type_mismatch not_object undefined_member undefined_variable
 
 }
