@@ -66,7 +66,7 @@ void typeError(TypeErrorCode code) {
 
 
 
-CompoundType getExpressionType(ExpressionNode* expression, Visitor* visitor){
+CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
     if (typeid(*expression) == typeid(PlusNode)
         || (typeid(*expression) == typeid(MinusNode))
         || (typeid(*expression) == typeid(TimesNode))
@@ -419,7 +419,7 @@ if (expressionVariableInfo->type->baseType == bt_none && expressionVariableInfo-
 
   }
   else if (node->identifier_2->name=""){ //NULL or empty string?
-    //check classtable at name off class of 1st ID
+    //check classtable at name of class of 1st ID
     VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
     VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(currentClassName, identifier_1->name, this);
     if (expressionVariableInfo->type->baseType == bt_none && expressionVariableInfo->type->objectClassName == "failure"){
@@ -582,6 +582,10 @@ void TypeCheck::visitMethodCallNode(MethodCallNode* node) {
     }
     // next, check stuff about calledMethod
 
+
+
+    // instead, I think we may be able to just do:
+    getExpressionType(node);
 }
 
 // doing
