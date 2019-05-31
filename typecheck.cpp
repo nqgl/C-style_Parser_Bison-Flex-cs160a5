@@ -244,8 +244,59 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
 // maybe a function to look up a name in current scope
 // unclear whether it should be a different function for looking up a methodinfo vs a vaiableinfo vs a classinfo
 
+<<<<<<< HEAD
+=======
+VariableInfo getVariableInfo(std::string& identifier, Visitor* scope){
+        // looks for, in this order:
+        // local variables
+        // parameters (how to find their name? not in methodinfo)
+        // member of class (or superclass (check recursively probably))
+        // try search in currentvariabletable
+    if (scope->currentVariableTable->count(identifier) != 0){
+                // searches both locals and parameters,
+                // because both are stored in the same variable table
+        return scope->currentVariableTable->at(identifier);
+    }
+    else {
+        VariableInfo& checkInfo = getVariableInfoFromClassMember(scope->currentClassName, identifier, scope);
+        if (checkInfo.type.baseType == bt_none && checkInfo.type.objectClassName == "failure"){
+            typeError(undefined_variable);
+        }
+    }
+}
+
+VariableInfo getVariableInfoFromClassMember(std::string& classname, std::string& identifier, Visitor* scope){
+    ClassInfo& classInfo = getClassInfo(classname, scope);
+    if (classInfo->members->count(identifier) != 0) {
+        return classInfo->members->at(identifier);
+    }
+    else if (classInfo.superClassName != ""){
+        if (scope->classTable->count(classInfo.superClassName) != 0){
+            return getVariableInfoFromClassMember(classInfo.superClassName, identifier, scope);
+        }
+        else {
+            CompoundType failuretype {bt_none, "failure"};
+            VariableInfo varinfo {failuretype, -1, -1};
+            return varinfo
+        }
+    }
+}
 
 
+MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifier, Visitor* scope){
+    ClassInfo& classInfo = getClassInfo(classname, scope);
+    if (classInfo->methods->count(identifier) != 0) {
+        return classInfo->methods->at(identifier);
+    }
+    else if (classInfo.superClassName != ""){
+        if (scope->classTable->count(classInfo.superClassName) != 0){
+            return getMethodInfoFromClass(classInfo.superClassName, identifier, scope);
+        }
+        else {
+            typeError(undefined_method);
+        }
+    }
+}
 
 CompoundType compundFromTypeNode(TypeNode* node){
     CompoundType nodetype;
@@ -388,7 +439,7 @@ void TypeCheck::visitDeclarationNode(DeclarationNode* node) {
         else { var.size = 4; }
         var.offset = currentLocalOffset;
         currentLocalOffset -= 4;
-        
+
         (*(this->currentVariableTable))[id->name] = var;
     }
 }
@@ -655,7 +706,7 @@ void TypeCheck::visitBooleanTypeNode(BooleanTypeNode* node) {
 void TypeCheck::visitObjectTypeNode(ObjectTypeNode* node) {
     // WRITEME: Replace with code if necessary
     // There might be something to do there
-    getClassInfo(node->identifier->name); // this should simply check that 
+    getClassInfo(node->identifier->name); // this should simply check that
                                 //there is a class by that name to have as a type
     node.baseType = bt_object;
 }
