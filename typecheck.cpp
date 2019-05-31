@@ -86,8 +86,7 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
             return booleanType;
         }
         else if (typeid(*expression) == typeid(VariableNode)){
-            VariableInfo& varInfo;
-            varInfo = getVariableInfo(expression->identifier, visitor);
+            VariableInfo& varInfo = getVariableInfo(expression->identifier, visitor);
             return varInfo->type;
         }
         else if (typeid(*expression) == typeid(MethodCallNode)) {
@@ -277,7 +276,7 @@ void TypeCheck::visitProgramNode(ProgramNode* node) {
     if (classTable->count("Main")==0){
         TypeErrorCode(no_main_class);
     }
-    ClassInfo main_class = classTable['Main'];
+    ClassInfo main_class = classTable["Main"];
     if (main_class.methods->count("main")==0) {
         TypeErrorCode(no_main_method);
     }
