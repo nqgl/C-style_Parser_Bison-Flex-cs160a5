@@ -71,6 +71,8 @@ ClassInfo getClassInfo(std::string& identifier, TypeCheck* scope) {
     else {
         typeError(undefined_class);
     }
+    ClassInfo c;
+    return c;
 }
 
 
@@ -134,6 +136,7 @@ MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifie
     else {
             typeError(undefined_method);
     }
+    return getMethodInfoFromClass(classInfo.superClassName, identifier, scope);
 }
 
 
@@ -247,6 +250,9 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
         CompoundType newType = {bt_object, newExpression->identifier->name};
         return newType;
     }
+    CompoundType newType = {bt_object, ""};
+    return newType;
+
 }
 
 // maybe a function to look up a name in current scope
@@ -449,6 +455,7 @@ void TypeCheck::visitAssignmentNode(AssignmentNode* node) {
     if (node->identifier_2 != NULL){ //NULL or empty string?
         //check classtable at name off class of 1st ID
         VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
+
         if (newVar.type.baseType != bt_object){
           typeError(not_object);
         }

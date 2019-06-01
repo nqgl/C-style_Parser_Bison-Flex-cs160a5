@@ -8,7 +8,7 @@ extern int yyparse();
 ASTNode* astRoot;
 
 int main(void) {
-    yydebug = 1; // Set this to 1 if you want the parser to output debug information and parse process
+    yydebug = 0; // Set this to 1 if you want the parser to output debug information and parse process
 
     astRoot = NULL;
 
