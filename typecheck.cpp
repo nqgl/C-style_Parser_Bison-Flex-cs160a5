@@ -88,6 +88,10 @@ VariableInfo getVariableInfoFromClassMember(std::string& classname, std::string&
             VariableInfo varinfo {failuretype, -1, -1};
             return varinfo;
         }
+    } else {
+            CompoundType failuretype {bt_none, "failure"};
+            VariableInfo varinfo {failuretype, -1, -1};
+            return varinfo;
     }
 }
 
@@ -104,9 +108,10 @@ VariableInfo getVariableInfo(std::string& identifier, TypeCheck* scope){
     }
     else {
         VariableInfo checkInfo = getVariableInfoFromClassMember(scope->currentClassName, identifier, scope);
-        if (checkInfo.type.baseType == bt_none && checkInfo.type.objectClassName == "failure"){
+        if (checkInfo.type.baseType == bt_none && checkInfo.type.objectClassName == "failure") {
             typeError(undefined_variable);
         }
+        return checkInfo;
     }
 }
 
@@ -125,7 +130,10 @@ MethodInfo getMethodInfoFromClass(std::string& classname, std::string& identifie
         else {
             typeError(undefined_method);
         }        
-    } 
+    }
+    else {
+            typeError(undefined_method);
+    }
 }
 
 
@@ -236,6 +244,8 @@ CompoundType getExpressionType(ExpressionNode* expression, TypeCheck* visitor){
                 typeError(argument_number_mismatch);
             }
         }
+        CompoundType newType = {bt_object, newExpression->identifier->name};
+        return newType;
     }
 }
 
@@ -266,7 +276,7 @@ CompoundType compoundFromTypeNode(TypeNode* node){
 }
 
 bool areSameCompoundType(CompoundType& t1, CompoundType& t2){
-    return (t1.baseType != t2.baseType) && (t1.objectClassName != t2.objectClassName);
+    return (t1.baseType == t2.baseType) && (t1.objectClassName == t2.objectClassName);
 }
 
 // TypeCheck Visitor Functions: These are the functions you will
@@ -276,22 +286,20 @@ bool areSameCompoundType(CompoundType& t1, CompoundType& t2){
 void TypeCheck::visitProgramNode(ProgramNode* node) {
     // WRITEME: Replace with code if necessary
     this->classTable = new ClassTable();
-
     node->visit_children(this);
-
     if (classTable->count("Main")==0){
-        TypeErrorCode(no_main_class);
+        typeError(no_main_class);
     }
     ClassInfo main_class = (*(classTable))["Main"];
     if (main_class.methods->count("main")==0) {
-        TypeErrorCode(no_main_method);
+        typeError(no_main_method);
     }
     if (!main_class.members->empty()){
-        TypeErrorCode(main_class_members_present);
+        typeError(main_class_members_present);
     }
     MethodInfo main_method = (*(classTable->at("Main").methods))["main"];
     if (main_method.returnType.baseType != bt_none || main_method.parameters->size() != 0){
-        TypeErrorCode(main_method_incorrect_signature);
+        typeError(main_method_incorrect_signature);
     }
 }
 
@@ -301,19 +309,28 @@ void TypeCheck::visitClassNode(ClassNode* node) {
     ClassInfo classInfo;
     classInfo.methods = new MethodTable();
     classInfo.members = new VariableTable();
-    classInfo.superClassName = node->identifier_2->name; // probably need to
+    currentLocalOffset = 0;
+    if (node->identifier_2 != NULL) {
+        classInfo.superClassName = node->identifier_2->name; // probably need to
+        if (classTable->count(classInfo.superClassName) == 0){
+            typeError(undefined_class);
+        }
+    }
+    else {
+        classInfo.superClassName = "";
+    }
+    (*(this->classTable))[node->identifier_1->name] = classInfo;
     this->currentMethodTable = classInfo.methods;
     this->currentVariableTable = classInfo.members;
 
-    this->currentClassName = node ->identifier_1->name;
+    this->currentClassName = node->identifier_1->name;
     node->visit_children(this);
+
     classInfo.membersSize = classInfo.members->size()*4; //TA magic
 
-    (*(this->classTable))[node->identifier_1->name] = classInfo;
-
-    if (this->classTable->count(currentClassName)==0){ // if constructor returns a type, throw error
-        TypeErrorCode(undefined_class);
-    }
+/*    if (this->classTable->count(currentClassName)==0){ // if constructor returns a type, throw error? this doesn't do that
+        typeError(undefined_class);                     // I think it's also checking the wrong condition?
+    }*/
 }
 
 
@@ -324,28 +341,38 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     methodInfo.variables = new VariableTable();
     methodInfo.returnType = compoundFromTypeNode(node->type);
     methodInfo.parameters = new std::list<CompoundType>();
-
     // prime visitor for next visits
     this->currentLocalOffset = -4;
     this->currentParameterOffset = 12;
     this->currentVariableTable = methodInfo.variables;
 
     // set up methodinfo->parameters and put parameters into variable Table
-    for (ParameterNode* p : *node->parameter_list){
-        VariableInfo parameterInfo; // var table info
-        CompoundType parameterType = compoundFromTypeNode(p->type); // param list info
-        methodInfo.parameters->push_back(parameterType);
-        parameterInfo.offset = this->currentParameterOffset;
-        this->currentParameterOffset += 4;
-        parameterInfo.size = this->classTable->at(parameterType.objectClassName).membersSize;
-        parameterInfo.type = parameterType;
-        (*(methodInfo.variables))[p->identifier->name]; //worng
+    if (node->parameter_list != NULL) {
+        for (ParameterNode *p : *(node->parameter_list)) {
+
+            VariableInfo parameterInfo; // var table info
+            CompoundType parameterType = compoundFromTypeNode(p->type); // param list info
+
+            methodInfo.parameters->push_back(parameterType);
+            parameterInfo.offset = this->currentParameterOffset;
+            this->currentParameterOffset += 4;
+            if (parameterType.baseType == bt_object) {
+                parameterInfo.size = 4;
+            } else {
+                parameterInfo.size = 4;
+            }
+            parameterInfo.type = parameterType;
+
+            (*(methodInfo.variables))[p->identifier->name] = parameterInfo;
+        }
     }
-
     node->visit_children(this);
+    if (node->parameter_list != NULL) {
+        methodInfo.localsSize = (methodInfo.variables->size() - node->parameter_list->size()) * 4; // reserve 4 for each pointer needed for each local
+    } else {
+        methodInfo.localsSize = methodInfo.variables->size() * 4; // reserve 4 for each pointer needed for each local
 
-    methodInfo.localsSize = methodInfo.variables->size()*4; // reserve 4 for each pointer needed for each local
-
+    }
     if (node->identifier->name == this->currentClassName){
     // if methodInfo is constructor
     // by if it has the same name as current class return statement is type of methodInfo
@@ -357,9 +384,15 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
     }
 
     // check return type
-    CompoundType returnStatementType = getExpressionType(node->methodbody->returnstatement->expression, this);
-
-    if (areSameCompoundType(returnStatementType, methodInfo.returnType)){
+    CompoundType returnStatementType;
+    if(node->methodbody->returnstatement == NULL){
+         returnStatementType = {bt_none, ""};
+    }
+    else{
+        returnStatementType = getExpressionType(node->methodbody->returnstatement->expression, this);
+    }
+    //typeError(undefined_variable); //testerror
+    if (!areSameCompoundType(returnStatementType, methodInfo.returnType)){
         typeError(return_type_mismatch);
     }
 
@@ -369,6 +402,7 @@ void TypeCheck::visitMethodNode(MethodNode* node) {
 void TypeCheck::visitMethodBodyNode(MethodBodyNode* node) {
     // WRITEME: Replace with code if necessary
     // do we want to pass in the next methodbodyinfo by
+
     node->visit_children(this);
 }
 
@@ -379,6 +413,10 @@ void TypeCheck::visitParameterNode(ParameterNode* node) {
 
 void TypeCheck::visitDeclarationNode(DeclarationNode* node) {
     // WRITEME: Replace with code if necessary
+    node->visit_children(this);
+    if (node->basetype == bt_object){
+        getClassInfo(node->objectClassName, this); // implied check for existence
+    }
     for (IdentifierNode* id : *node->identifier_list){
         VariableInfo var;
         var.type = compoundFromTypeNode(node->type);
@@ -388,7 +426,11 @@ void TypeCheck::visitDeclarationNode(DeclarationNode* node) {
         }
         else { var.size = 4; }
         var.offset = currentLocalOffset;
-        currentLocalOffset -= 4;
+        if (currentLocalOffset < 0) {
+            currentLocalOffset -= 4;
+        } else {
+            currentLocalOffset += 4;
+        }
 
         (*(this->currentVariableTable))[id->name] = var;
     }
@@ -396,50 +438,43 @@ void TypeCheck::visitDeclarationNode(DeclarationNode* node) {
 
 void TypeCheck::visitReturnStatementNode(ReturnStatementNode* node) {
     // WRITEME: Replace with code if necessary // WRITEME: Replace with code if necessary
-
+    node->visit_children(this);
     //
     //
 }
 
 void TypeCheck::visitAssignmentNode(AssignmentNode* node) {
-
-  node->visit_children(this);
-
-  CompoundType expressionType = getExpressionType(node->expression, this);
-
-  if (node->identifier_2->name!=""){ //NULL or empty string?
-    //check classtable at name off class of 1st ID
-    VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
-VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(newVar.type.objectClassName, node->identifier_2->name, this);
-if (expressionVariableInfo.type.baseType == bt_none && expressionVariableInfo.type.objectClassName == "failure"){
-  typeError(undefined_member);
-}
-
-    if (newVar.type.baseType != bt_object){
-      typeError(not_object);
-    }
-    if (areSameCompoundType(expressionType, expressionVariableInfo.type)){
-      typeError(assignment_type_mismatch);
+    node->visit_children(this);
+    CompoundType expressionType = getExpressionType(node->expression, this);
+    if (node->identifier_2 != NULL){ //NULL or empty string?
+        //check classtable at name off class of 1st ID
+        VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
+        if (newVar.type.baseType != bt_object){
+          typeError(not_object);
+        }
+        VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(newVar.type.objectClassName, node->identifier_2->name, this);
+        if (expressionVariableInfo.type.baseType == bt_none && expressionVariableInfo.type.objectClassName == "failure"){
+          typeError(undefined_member);
+        }
+        if (!areSameCompoundType(expressionType, expressionVariableInfo.type)){
+          typeError(assignment_type_mismatch);
+        }
     }
 
-
-  }
   else if (node->identifier_2 == NULL){ //NULL or empty string?
     //check classtable at name of class of 1st ID
-    VariableInfo newVar = getVariableInfo(node->identifier_1->name, this);
-    VariableInfo expressionVariableInfo= getVariableInfoFromClassMember(currentClassName, node->identifier_1->name, this);
-    if (expressionVariableInfo.type.baseType == bt_none && expressionVariableInfo.type.objectClassName == "failure"){
+    VariableInfo assignedVar = getVariableInfo(node->identifier_1->name, this);
+    if (assignedVar.type.baseType == bt_none && assignedVar.type.objectClassName == "failure"){
       typeError(undefined_member);
     }
-    if (newVar.type.baseType != bt_object){
-      typeError(not_object);
-    }
-    if (areSameCompoundType(expressionType, expressionVariableInfo.type)){
+    if (!areSameCompoundType(expressionType, assignedVar.type)){
       typeError(assignment_type_mismatch);
     }
 
 
   }
+
+    node->visit_children(this);
     // check for errors: assignment_type_mismatch not_object undefined_member undefined_variable
 
 }
@@ -475,7 +510,7 @@ void TypeCheck::visitDoWhileNode(DoWhileNode* node) {
 
 void TypeCheck::visitPrintNode(PrintNode* node) {
     // WRITEME: Replace with code if necessary
-
+    node->visit_children(this);
 }
 
 
@@ -490,6 +525,7 @@ void TypeCheck::visitPlusNode(PlusNode* node) {
             || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitMinusNode(MinusNode* node) {
@@ -498,6 +534,7 @@ void TypeCheck::visitMinusNode(MinusNode* node) {
             || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitTimesNode(TimesNode* node) {
@@ -506,6 +543,7 @@ void TypeCheck::visitTimesNode(TimesNode* node) {
             || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitDivideNode(DivideNode* node) {
@@ -514,6 +552,7 @@ void TypeCheck::visitDivideNode(DivideNode* node) {
             || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitGreaterNode(GreaterNode* node) {
@@ -522,6 +561,7 @@ void TypeCheck::visitGreaterNode(GreaterNode* node) {
             || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitGreaterEqualNode(GreaterEqualNode* node) {
@@ -530,6 +570,7 @@ void TypeCheck::visitGreaterEqualNode(GreaterEqualNode* node) {
             || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitEqualNode(EqualNode* node) {
@@ -538,6 +579,7 @@ void TypeCheck::visitEqualNode(EqualNode* node) {
             || (getExpressionType(node->expression_2, this).baseType != bt_integer)){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitAndNode(AndNode* node) {
@@ -546,6 +588,7 @@ void TypeCheck::visitAndNode(AndNode* node) {
             || (getExpressionType(node->expression_2, this).baseType != bt_boolean)){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitOrNode(OrNode* node) {
@@ -554,6 +597,7 @@ void TypeCheck::visitOrNode(OrNode* node) {
             || (getExpressionType(node->expression_2, this).baseType != bt_boolean)){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitNotNode(NotNode* node) {
@@ -561,18 +605,21 @@ void TypeCheck::visitNotNode(NotNode* node) {
     if (getExpressionType(node->expression, this).baseType != bt_boolean){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 void TypeCheck::visitNegationNode(NegationNode* node) {
     // WRITEME: Replace with code if necessary
-    if (getExpressionType(node->expression, this).baseType != bt_boolean){
+    if (getExpressionType(node->expression, this).baseType != bt_integer){
         typeError(expression_type_mismatch);
     }
+    node->visit_children(this);
 }
 
 // doing
 void TypeCheck::visitMethodCallNode(MethodCallNode* node) {
     // WRITEME: Replace with code if necessary
+/*
     std::string classname = currentClassName;
     MethodInfo calledMethod;
     if (node->identifier_2 != NULL){
@@ -585,29 +632,36 @@ void TypeCheck::visitMethodCallNode(MethodCallNode* node) {
     }
     else {
         calledMethod = getMethodInfoFromClass(currentClassName, node->identifier_1->name, this);
-    }
+    } */
     // next, check stuff about calledMethod
-
-
 
     // instead, I think we may be able to just do:
     getExpressionType(node, this);
+
+    node->visit_children(this); //need to check expressions in params
 }
 
 // doing
 void TypeCheck::visitMemberAccessNode(MemberAccessNode* node) {
     // WRITEME: Replace with code if necessary
+
     VariableInfo var = getVariableInfo(node->identifier_1->name, this); //checks for undefined variable
+    if (var.type.baseType != bt_object){
+        typeError(not_object);
+    }
     VariableInfo assignedType = getVariableInfoFromClassMember(var.type.objectClassName, node->identifier_2->name, this);
     if (assignedType.type.baseType == bt_none && assignedType.type.objectClassName == "failure"){
         typeError(undefined_member);
     }
+
+    node->visit_children(this);
 
 }
 
 void TypeCheck::visitVariableNode(VariableNode* node) {
     // WRITEME: Replace with code if necessary
     getVariableInfo(node->identifier->name, this); //does undef_var check
+    node->visit_children(this);
 }
 
 //nothing to do here?
@@ -624,10 +678,12 @@ void TypeCheck::visitBooleanLiteralNode(BooleanLiteralNode* node) {
 void TypeCheck::visitNewNode(NewNode* node) {
     // WRITEME: Replace with code if necessary
     getExpressionType(node, this);
+    node->visit_children(this);
 }
 
 void TypeCheck::visitNoneNode(NoneNode* node) {
     // WRITEME: Replace with code if necessary
+    node->basetype = bt_none;
 }
 
 void TypeCheck::visitIdentifierNode(IdentifierNode* node) {
@@ -643,6 +699,7 @@ void TypeCheck::visitIntegerNode(IntegerNode* node) {
 void TypeCheck::visitIntegerTypeNode(IntegerTypeNode* node) {
     // WRITEME: Replace with code if necessary
     // pretty sure nothing to do here
+    node->basetype = bt_integer;
 }
 
 
@@ -650,6 +707,7 @@ void TypeCheck::visitIntegerTypeNode(IntegerTypeNode* node) {
 void TypeCheck::visitBooleanTypeNode(BooleanTypeNode* node) {
     // WRITEME: Replace with code if necessary
     // pretty sure nothing to do here
+    node->basetype = bt_boolean;
 }
 
 // done?
@@ -659,6 +717,7 @@ void TypeCheck::visitObjectTypeNode(ObjectTypeNode* node) {
     getClassInfo(node->identifier->name, this); // this should simply check that
                                 //there is a class by that name to have as a type
     node->basetype = bt_object;
+    node->objectClassName = node->identifier->name;
 }
 
 
